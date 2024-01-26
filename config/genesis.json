@@ -1,0 +1,103 @@
+{
+  "genesis_time": "2022-06-04T00:00:00Z",
+  "chain_id": "0x59454E4951",
+  "initial_height": "1",
+  "consensus_params": {
+    "block": {
+      "max_bytes": "12800000",
+      "max_gas": "-1",
+      "time_iota_ms": "1000"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
+    },
+    "validator": {
+      "pub_key_types": [
+        "ed25519"
+      ]
+    },
+    "version": {}
+  },
+  "app_hash": "",
+  "app_state": {
+    "validators": [
+      {
+        "address": "0x8b4031c50d6a2359c78375dd210bcee1f25df48b",
+        "pubkey": "0x1e55fefe66cbaa4882fa8683937215638f31c66d7db77f2cbb4c65648e35fc9b",
+        "reward_to": "0x8b4031c50d6a2359c78375dd210bcee1f25df48b",
+        "voting_power": 1,
+        "introduction": "smartcore1",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "207AA3E734DCAB77068C32B137907324EF42BB4A"
+      },
+      {
+        "address": "0x293113763efe9729c6cdf9cda585c9707ea01d0a",
+        "pubkey": "0x6897de180b29c5c722e30eed54665a6b5e812e43c5d0d1aa734a593dd68af6e0",
+        "reward_to": "0x293113763efe9729c6cdf9cda585c9707ea01d0a",
+        "voting_power": 1,
+        "introduction": "smartcore2",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "4C54ECAD1F2B4A0BBD7F4A17A567FB4A51D41F2F"
+      },
+      {
+        "address": "0x49d1bc37e7e4c0393754c4fdfec6af4a4ee22244",
+        "pubkey": "0xcfc897143bb59d43a00a04b82430179ecb553fbfef08369d51c31f92e2612e2b",
+        "reward_to": "0x49d1bc37e7e4c0393754c4fdfec6af4a4ee22244",
+        "voting_power": 1,
+        "introduction": "smartcore3",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "90260531126D301F269C7A88281F5EE47407ECF0"
+      },
+      {
+        "address": "0xf714d3f4a107ad204c4e98692537d3aa2ca0c3f3",
+        "pubkey": "0xbd5ee6d964ad0f595face22a94eb256c44a03b112b7ec76e6ee13cd1db49957d",
+        "reward_to": "0xf714d3f4a107ad204c4e98692537d3aa2ca0c3f3",
+        "voting_power": 1,
+        "introduction": "smartcore4",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "8385EAA81DD59BB2AE24407AD390CB2C641C0591"
+      },
+      {
+        "address": "0x8d2d3f481800c2ee69e48c5d14e0e15ba16078cb",
+        "pubkey": "0xb07ef9b07876c4e935a69757a10dd6949b1f9dee4c4f2dc7c5e6c2c3d9b8761b",
+        "reward_to": "0x8d2d3f481800c2ee69e48c5d14e0e15ba16078cb",
+        "voting_power": 1,
+        "introduction": "smartcore5",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "44F47AFEB2FA4309EAB64C7CE1C6DAF28BFBEFBF"
+      },
+      {
+        "address": "0x0398023670561c50af736371f848a7182541184a",
+        "pubkey": "0x6bb2e2fa2ebd394a5e25643caede99d8bea604ce6daa802fabed2d05f2854a2f",
+        "reward_to": "0x0398023670561c50af736371f848a7182541184a",
+        "voting_power": 1,
+        "introduction": "smartcore6",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "CE54F2565369B34D34D2541AED15FA9973EA19AB"
+      },
+      {
+        "address": "0xa6b9ba3c7d83e2037c03ebcacfda84874fa3427e",
+        "pubkey": "0x6fe4ec5c85018b095f0da412cbbed49b1298f8ca9e077f2fff713403a5f43c30",
+        "reward_to": "0xa6b9ba3c7d83e2037c03ebcacfda84874fa3427e",
+        "voting_power": 1,
+        "introduction": "smartcore7",
+        "staked_coins": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "is_retiring": false,
+        "miner_address": "87318983DE4A22C15453BD7C1EC3A5E50F165841"
+      }
+    ],
+    "alloc": {
+      "0xf96ae03f3637e3195ebcb85f0043052338196e57": {
+        "balance": "0x115eec47f6cf7e35000000"
+      }
+    }
+  }
+}
