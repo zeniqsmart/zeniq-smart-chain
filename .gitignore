@@ -1,0 +1,8 @@
+build
+**/*.test
+ccrpc/*data/
+testdata/sol/node_modules
+
+node*
+testnodes
+

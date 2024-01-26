@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  node0:
+    build: .
+    command: zeniq-smart-chain/build/zeniqsmartd start
+    volumes:
+      - ../:/zeniq_smart
+      - ./testnodes/node0:/root/.zeniqsmartd
+    networks:
+      testnodes:
+        ipv4_address: 172.18.188.10
+  node1:
+    build: .
+    command: zeniq-smart-chain/build/zeniqsmartd start
+    volumes:
+      - ../:/zeniq_smart
+      - ./testnodes/node1:/root/.zeniqsmartd
+    networks:
+      testnodes:
+        ipv4_address: 172.18.188.11
+  node2:
+    build: .
+    command: zeniq-smart-chain/build/zeniqsmartd start
+    volumes:
+      - ../:/zeniq_smart
+      - ./testnodes/node2:/root/.zeniqsmartd
+    networks:
+      testnodes:
+        ipv4_address: 172.18.188.12
+  node3:
+    build: .
+    command: zeniq-smart-chain/build/zeniqsmartd start
+    volumes:
+      - ../:/zeniq_smart
+      - ./testnodes/node3:/root/.zeniqsmartd
+    networks:
+      testnodes:
+        ipv4_address: 172.18.188.13
+    # stdin_open: true
+    # tty: true
+networks:
+  testnodes:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.18.188.0/24
+
