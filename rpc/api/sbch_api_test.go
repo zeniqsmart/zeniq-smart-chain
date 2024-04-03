@@ -12,7 +12,7 @@ import (
 
 	dbtypes "github.com/zeniqsmart/db-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/api"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/testutils"
 	rpctypes "github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
@@ -311,15 +311,15 @@ func TestQueryLogs(t *testing.T) {
 
 	blk1 := testutils.NewMdbBlockBuilder().
 		Height(1).Hash(gethcmn.Hash{0xB1}).
-		Tx(tx1Hash, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic2, topic3}}).
-		Tx(tx2Hash, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic4, topic5}}).
-		Tx(tx3Hash, motypes.Log{Address: addr2, Topics: [][32]byte{topic2, topic3, topic4}}).
+		Tx(tx1Hash, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic2, topic3}}).
+		Tx(tx2Hash, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic4, topic5}}).
+		Tx(tx3Hash, types.Log{Address: addr2, Topics: [][32]byte{topic2, topic3, topic4}}).
 		Build()
 	blk2 := testutils.NewMdbBlockBuilder().
 		Height(2).Hash(gethcmn.Hash{0xB2}).
-		Tx(tx4Hash, motypes.Log{Address: addr2, Topics: [][32]byte{topic2, topic4, topic5}}).
-		Tx(tx5Hash, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic2}}).
-		Tx(tx6Hash, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic4}}).
+		Tx(tx4Hash, types.Log{Address: addr2, Topics: [][32]byte{topic2, topic4, topic5}}).
+		Tx(tx5Hash, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic2}}).
+		Tx(tx6Hash, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic4}}).
 		Build()
 	_app.AddBlocksToHistory(blk1, blk2)
 
@@ -352,15 +352,15 @@ func TestQueryLogs_limit(t *testing.T) {
 	topic3 := gethcmn.Hash{0xD3}
 	blk1 := testutils.NewMdbBlockBuilder().
 		Height(1).Hash(gethcmn.Hash{0xB1}).
-		Tx(gethcmn.Hash{0xC1}, motypes.Log{Address: addr1, Topics: [][32]byte{topic1}}).
-		Tx(gethcmn.Hash{0xC2}, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic2}}).
-		Tx(gethcmn.Hash{0xC3}, motypes.Log{Address: addr1, Topics: [][32]byte{topic2, topic1}}).
-		Tx(gethcmn.Hash{0xC4}, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic2, topic3}}).
-		Tx(gethcmn.Hash{0xC5}, motypes.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic2}}).
-		Tx(gethcmn.Hash{0xC6}, motypes.Log{Address: addr1, Topics: [][32]byte{topic2, topic1, topic3}}).
-		Tx(gethcmn.Hash{0xC7}, motypes.Log{Address: addr1, Topics: [][32]byte{topic2, topic3, topic1}}).
-		Tx(gethcmn.Hash{0xC8}, motypes.Log{Address: addr1, Topics: [][32]byte{topic3, topic1, topic2}}).
-		Tx(gethcmn.Hash{0xC9}, motypes.Log{Address: addr1, Topics: [][32]byte{topic3, topic2, topic1}}).
+		Tx(gethcmn.Hash{0xC1}, types.Log{Address: addr1, Topics: [][32]byte{topic1}}).
+		Tx(gethcmn.Hash{0xC2}, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic2}}).
+		Tx(gethcmn.Hash{0xC3}, types.Log{Address: addr1, Topics: [][32]byte{topic2, topic1}}).
+		Tx(gethcmn.Hash{0xC4}, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic2, topic3}}).
+		Tx(gethcmn.Hash{0xC5}, types.Log{Address: addr1, Topics: [][32]byte{topic1, topic3, topic2}}).
+		Tx(gethcmn.Hash{0xC6}, types.Log{Address: addr1, Topics: [][32]byte{topic2, topic1, topic3}}).
+		Tx(gethcmn.Hash{0xC7}, types.Log{Address: addr1, Topics: [][32]byte{topic2, topic3, topic1}}).
+		Tx(gethcmn.Hash{0xC8}, types.Log{Address: addr1, Topics: [][32]byte{topic3, topic1, topic2}}).
+		Tx(gethcmn.Hash{0xC9}, types.Log{Address: addr1, Topics: [][32]byte{topic3, topic2, topic1}}).
 		Build()
 	_app.AddBlocksToHistory(blk1)
 
@@ -382,47 +382,47 @@ func TestQueryLogs_OneTx(t *testing.T) {
 		Height(0x222ef).
 		Hash(gethcmn.HexToHash("0x7b61ffc31c9cbf2365d76d406976cd00694879bdb4ecd7aaa2bde0a11bdf1a4b")).
 		Tx(gethcmn.HexToHash("0x652e16e6f6d7c473488f6b95995dfe68ebb3b413d29f6422e676576eabf261b7"),
-			motypes.Log{Address: gethcmn.HexToAddress("0xc801a4862e5c877e46065d8547fdb3220ff441f5"),
+			types.Log{Address: gethcmn.HexToAddress("0xc801a4862e5c877e46065d8547fdb3220ff441f5"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
 					gethcmn.HexToHash("0x0000000000000000000000002c4487b596b6034d6a8634616a8fd9934434d20b"),
 					gethcmn.HexToHash("0x000000000000000000000000a112caaefecb231b91779a9e68c12080672fcc81"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0xc801a4862e5c877e46065d8547fdb3220ff441f5"),
+			types.Log{Address: gethcmn.HexToAddress("0xc801a4862e5c877e46065d8547fdb3220ff441f5"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
 					gethcmn.HexToHash("0x0000000000000000000000002c4487b596b6034d6a8634616a8fd9934434d20b"),
 					gethcmn.HexToHash("0x000000000000000000000000a207d13e6f65799c9ab42ade81ed49f05b3b6f5d"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0x4272d9d470e71f00adb91fbf0ea8276959e4e15d"),
+			types.Log{Address: gethcmn.HexToAddress("0x4272d9d470e71f00adb91fbf0ea8276959e4e15d"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
 					gethcmn.HexToHash("0x0000000000000000000000002c4487b596b6034d6a8634616a8fd9934434d20b"),
 					gethcmn.HexToHash("0x000000000000000000000000a112caaefecb231b91779a9e68c12080672fcc81"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0x4272d9d470e71f00adb91fbf0ea8276959e4e15d"),
+			types.Log{Address: gethcmn.HexToAddress("0x4272d9d470e71f00adb91fbf0ea8276959e4e15d"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
 					gethcmn.HexToHash("0x0000000000000000000000002c4487b596b6034d6a8634616a8fd9934434d20b"),
 					gethcmn.HexToHash("0x000000000000000000000000a207d13e6f65799c9ab42ade81ed49f05b3b6f5d"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
+			types.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
 					gethcmn.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 					gethcmn.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
+			types.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
 					gethcmn.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 					gethcmn.HexToHash("0x0000000000000000000000002c4487b596b6034d6a8634616a8fd9934434d20b"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
+			types.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1"),
 				}},
-			motypes.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
+			types.Log{Address: gethcmn.HexToAddress("0xa112caaefecb231b91779a9e68c12080672fcc81"),
 				Topics: [][32]byte{
 					gethcmn.HexToHash("0x4c209b5fc8ad50758f13e2e1088ba56a560dff690a1c6fef26394f4c03821c4f"),
 					gethcmn.HexToHash("0x000000000000000000000000a207d13e6f65799c9ab42ade81ed49f05b3b6f5d"),

@@ -12,12 +12,12 @@ import (
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 	"github.com/tendermint/tendermint/libs/log"
 
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	sbchapi "github.com/zeniqsmart/zeniq-smart-chain/api"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	rpctypes "github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
-	"github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 var _ SbchAPI = (*sbchAPI)(nil)
@@ -32,7 +32,7 @@ type SbchAPI interface {
 	GetTxListByHeightWithRange(height gethrpc.BlockNumber, start, end hexutil.Uint64) ([]map[string]interface{}, error)
 	GetAddressCount(kind string, addr gethcmn.Address) hexutil.Uint64
 	GetSep20AddressCount(kind string, contract, addr gethcmn.Address) hexutil.Uint64
-	GetEpochs(start, end hexutil.Uint64) ([]*types.Epoch, error)
+	GetEpochs(start, end hexutil.Uint64) ([]*stake.Epoch, error)
 	GetEpochList(from string) ([]*StakingEpoch, error)
 	GetCurrEpoch(includesPosVotes *bool) (*StakingEpoch, error)
 	GetCCEpochs(start, end hexutil.Uint64) ([]*cctypes.CCEpoch, error)
@@ -154,7 +154,7 @@ func (sbch sbchAPI) QueryLogs(addr gethcmn.Address, topics []gethcmn.Hash,
 	if err != nil {
 		return nil, err
 	}
-	return motypes.ToGethLogs(logs), nil
+	return types.ToGethLogs(logs), nil
 }
 
 func (sbch sbchAPI) GetAddressCount(kind string, addr gethcmn.Address) hexutil.Uint64 {
@@ -195,7 +195,7 @@ func (sbch sbchAPI) GetSep20AddressCount(kind string, contract, addr gethcmn.Add
 	return hexutil.Uint64(0)
 }
 
-func (sbch sbchAPI) GetEpochs(start, end hexutil.Uint64) ([]*types.Epoch, error) {
+func (sbch sbchAPI) GetEpochs(start, end hexutil.Uint64) ([]*stake.Epoch, error) {
 	sbch.logger.Debug("zeniq_getEpochs")
 	if end == 0 {
 		end = start + 10

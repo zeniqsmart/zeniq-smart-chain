@@ -6,7 +6,7 @@ import (
 
 	gethcmn "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 )
 
 const (
@@ -34,8 +34,8 @@ type InternalTx struct {
 	CreatedAddress *gethcmn.Address `json:"contractAddress,omitempty"`
 }
 
-func buildInternalCallList(internalTxCalls []motypes.InternalTxCall,
-	internalTxReturns []motypes.InternalTxReturn) []*InternalTx {
+func buildInternalCallList(internalTxCalls []types.InternalTxCall,
+	internalTxReturns []types.InternalTxReturn) []*InternalTx {
 
 	callList := make([]*InternalTx, len(internalTxCalls))
 	var callStack []*InternalTx
@@ -86,7 +86,7 @@ func buildInternalCallList(internalTxCalls []motypes.InternalTxCall,
 	return callList
 }
 
-func newCallSite(call motypes.InternalTxCall) *InternalTx {
+func newCallSite(call types.InternalTxCall) *InternalTx {
 	return &InternalTx{
 		depth:    call.Depth,
 		From:     call.Sender,
@@ -96,7 +96,7 @@ func newCallSite(call motypes.InternalTxCall) *InternalTx {
 		Input:    call.Input,
 	}
 }
-func addRetInfo(callSite *InternalTx, ret motypes.InternalTxReturn) {
+func addRetInfo(callSite *InternalTx, ret types.InternalTxReturn) {
 	callSite.StatusCode = hexutil.Uint64(ret.StatusCode)
 	callSite.GasUsed = callSite.GasLimit - hexutil.Uint64(ret.GasLeft)
 	callSite.Output = ret.Output

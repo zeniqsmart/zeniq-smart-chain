@@ -51,6 +51,7 @@ const (
 	flagMainnetRpcPassword   = "mainnet-rpc-password"
 	flagzeniqsmartUrl        = "zeniqsmart-url"
 	flagWatcherSpeedup       = "watcher-speedup"
+	flagTesting              = "testing"
 	flagRpcOnly              = "rpc-only"
 	flagArchiveMode          = "archive-mode"
 	flagSkipSanityCheck      = "skip-sanity-check"
@@ -96,6 +97,7 @@ func StartCmd(ctx *Context, appCreator AppCreator) *cobra.Command {
 	cmd.Flags().String(flagMainnetRpcPassword, "88888888", "BCH Mainnet RPC user password")
 	cmd.Flags().String(flagzeniqsmartUrl, "tcp://:8545", "zeniqsmart RPC URL")
 	cmd.Flags().Bool(flagWatcherSpeedup, false, "Watcher Speedup")
+	cmd.Flags().Bool(flagTesting, false, "Do without some checks")
 	cmd.Flags().Bool(flagRpcOnly, false, "Start RPC server even tmnode is not started correctly, only useful for debug purpose")
 	cmd.Flags().String(flagRpcAPI, "eth,web3,net,txpool,sbch,tm", "API's offered over the HTTP-RPC interface")
 	cmd.Flags().String(flagWsAPI, "eth,web3,net,txpool,sbch,tm", "API's offered over the WS-RPC interface")

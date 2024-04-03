@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
 
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/testutils"
 	rpctypes "github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
 )
@@ -37,7 +37,7 @@ type CallStackNode struct {
 	Calls      []*CallStackNode
 }
 
-func buildCallStack(tx *motypes.Transaction) *CallStackNode {
+func buildCallStack(tx *types.Transaction) *CallStackNode {
 	var nodes []*CallStackNode
 
 	for _, call := range tx.InternalTxCalls {

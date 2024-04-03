@@ -52,15 +52,15 @@ update-of-ads-log = false
 
 # CCRPCForkBlock: close to MaxInt64, eg 9223372036854000000, to disable
 # this is an example only
-cc-rpc-fork-block = 16666666
+cc-rpc-fork-block = 55555555
 
 # CCRPCEpochs: consensus-relevant
 # [[mainnetHeight>=184464,mainnetBlocks>=6],...]
 # this is an example only
-cc-rpc-epochs = [ [184464, 6] ]
+cc-rpc-epochs = [[302400,1008]]
 
 # HeightRevision consensus-relevant
 # 7=EVMC_ISTANBUL  is default from 0, 11=EVMC_SHANGHAI, next block > 14444444
 # this is an example only
-height-revision = [ [0,7], [17777777,7] ]
+height-revision = [ [0, 7], [55555555, 11] ]
 

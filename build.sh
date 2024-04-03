@@ -24,11 +24,9 @@ docker run -it -v ${PWD%/*}:/zeniq_smart zeniqsmart bash
 
 '
 
-THS=$PWD
-if [[ "${THS##*/}" != "zeniq-smart-chain" ]]; then
-    cd "zeniq-smart-chain"
-    THS=$THS/zeniq-smart-chain
-fi
+THS="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+cd $THS
+
 BD=$THS/build
 
 if [[ $1 == "clean" ]] ; then

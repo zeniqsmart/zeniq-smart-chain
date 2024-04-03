@@ -44,7 +44,7 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/ethutils"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/watcher"
 	watchertypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 
@@ -72,6 +72,10 @@ const (
 var (
 	errNoSyncDB    = errors.New("syncdb is not open")
 	errNoSyncBlock = errors.New("syncdb block is not ready")
+	/* EIP1559?
+	defaultBaseFeePerGas = uint256.NewInt(0).Bytes32()
+	defaultBaseFeeBlob   = uint256.NewInt(0).Bytes32()
+	*/
 )
 
 type IApp interface {
@@ -82,9 +86,9 @@ type IApp interface {
 	GetHistoryOnlyContext() *types.Context
 	RunTxForRpc(gethTx *gethtypes.Transaction, sender gethcmn.Address, estimateGas bool, height int64) (*ebp.TxRunner, int64)
 	RunTxForSbchRpc(gethTx *gethtypes.Transaction, sender gethcmn.Address, height int64) (*ebp.TxRunner, int64)
-	GetCurrEpoch() *stakingtypes.Epoch
-	GetWatcherEpochList() []*stakingtypes.Epoch
-	GetAppEpochList() []*stakingtypes.Epoch
+	GetCurrEpoch() *stake.Epoch
+	GetWatcherEpochList() []*stake.Epoch
+	GetAppEpochList() []*stake.Epoch
 	GetLatestBlockNum() int64
 	SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
@@ -114,9 +118,9 @@ type App struct {
 	// 'block' contains some meta information of a block. It is collected during BeginBlock&DeliverTx,
 	// and save to world state in Commit.
 	block *types.Block
-	// Some fields of 'block' are copied to 'blockInfo' in Commit. It will be later used by RpcContext
+	// Some fields of 'block' are copied to 'currBlock' in Commit. It will be later used by RpcContext
 	// Thus, eth_call can view the new block's height a little earlier than eth_blockNumber
-	blockInfo       atomic.Value // to store *types.BlockInfo
+	currBlock       atomic.Value // to store *types.BlockInfo
 	slashValidators [][20]byte   // updated in BeginBlock, used in Commit
 	lastVoters      [][]byte     // updated in BeginBlock, used in Commit
 	lastProposer    [20]byte     // updated in refresh of last block, used in updateValidatorsAndStakingInfo
@@ -140,8 +144,7 @@ type App struct {
 
 	//watcher
 	watcher   *watcher.Watcher
-	epochList []*stakingtypes.Epoch // caches the epochs collected by the watcher
-	//ccEpochList []*cctypes.CCEpoch
+	epochList []*stake.Epoch // caches the epochs collected by the watcher
 
 	//util
 	signer gethtypes.Signer
@@ -149,7 +152,7 @@ type App struct {
 
 	// tendermint wants to know validators whose voting power change
 	// it is loaded from ctx in Commit and used in EndBlock
-	validatorUpdate []*stakingtypes.Validator
+	validatorUpdate []*stake.Validator
 
 	//signature cache, cache ecrecovery's resulting sender addresses, to speed up checktx
 	sigCache map[gethcmn.Hash]SenderAndHeight
@@ -190,9 +193,9 @@ func validHeightRevision(e [][2]int64) {
 		if ie == 0 && ee[0] != 0 && ee[1] != 7 {
 			panic(fmt.Sprintf("height-revision %v must start with [0,7]\n", e))
 		}
-		//if ie > 0 && ee[0] < 14444444 {
-		//	panic(fmt.Sprintf("i>0 height-revision %v: block cannot be smaller than 14444444\n",e))
-		//}
+		if ie > 0 && ee[0] < 14444444 {
+			panic(fmt.Sprintf("i>0 height-revision %v: block cannot be smaller than 14444444\n", e))
+		}
 		if ee[1] < 7 {
 			panic(fmt.Sprintf("height-revision %v: revision cannot be smaller than 7 (EVMC_ISTANBUL)\n", e))
 		}
@@ -240,10 +243,14 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 
 	/*------ CCRPC check ------*/
 	app.logger.Info(fmt.Sprintf("NewApp CCRPCEpochs %v\n", config.AppConfig.CCRPCEpochs))
-	validCCRPCEpochs(config.AppConfig.CCRPCEpochs)
+	if !config.AppConfig.Testing {
+		validCCRPCEpochs(config.AppConfig.CCRPCEpochs)
+	}
 
 	/*------ height-revision check ------*/
-	validHeightRevision(config.AppConfig.HeightRevision)
+	if !config.AppConfig.Testing {
+		validHeightRevision(config.AppConfig.HeightRevision)
+	}
 
 	/*------signature cache------*/
 	app.sigCache = make(map[gethcmn.Hash]SenderAndHeight, config.AppConfig.SigCacheSize)
@@ -263,6 +270,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 
 	app.appHash = app.root.GetRootHash()
 
+	CCRPCForkBlock := app.GetCCRPCForkBlock()
 	/*------set engine------*/
 	app.txEngine = ebp.NewEbpTxExec(
 		param.EbpExeRoundCount,
@@ -271,7 +279,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 		5000, /*not consensus relevant*/
 		app.signer,
 		app.logger.With("module", "engine"),
-		app.config.AppConfig.CCRPCForkBlock,
+		CCRPCForkBlock,
 	)
 	//ebp.AdjustGasUsed = false
 
@@ -308,7 +316,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 
 	/*------set stakingInfo------*/
 	stakingInfo := staking.LoadStakingInfo(ctx)
-	currValidators := stakingtypes.GetActiveValidators(stakingInfo.Validators, staking.MinimumStakingAmount)
+	currValidators := stake.GetActiveValidators(stakingInfo.Validators, staking.MinimumStakingAmount)
 	app.validatorUpdate = stakingInfo.ValidatorsUpdate
 	for _, val := range currValidators {
 		app.logger.Debug(fmt.Sprintf("Load validator in NewApp: address(%s), pubkey(%s), votingPower(%d)",
@@ -326,7 +334,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 	app.logger.Info(fmt.Sprintf(
 		"New watcher: mainnet url(%s) epochNum(%d) lastEpochEndHeight(%d) speedUp(%v) CCRPCForkBlock(%v) CCRPCEpochs(%v)\n",
 		config.AppConfig.MainnetRPCUrl, stakingInfo.CurrEpochNum, lastEpochEndHeight, config.AppConfig.Speedup,
-		config.AppConfig.CCRPCForkBlock, config.AppConfig.CCRPCEpochs,
+		CCRPCForkBlock, config.AppConfig.CCRPCEpochs,
 	))
 
 	r := time.Duration(rand.Int() % 1000)
@@ -542,7 +550,7 @@ func (app *App) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInit
 	staking.AddGenesisValidatorsIntoStakingInfo(ctx, genesisValidators)
 	ctx.Close(true)
 
-	currValidators := stakingtypes.GetActiveValidators(genesisValidators, staking.MinimumStakingAmount)
+	currValidators := stake.GetActiveValidators(genesisValidators, staking.MinimumStakingAmount)
 	valSet := make([]abcitypes.ValidatorUpdate, len(currValidators))
 	for i, v := range currValidators {
 		p, _ := cryptoenc.PubKeyToProto(ed25519.PubKey(v.Pubkey[:]))
@@ -601,25 +609,29 @@ func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBe
 		panic("disk space below 1MB: panic!")
 	}
 
+	h := req.Header.Height
 	nBehind := app.config.AppConfig.BlocksBehind
-	for nBehind > 0 && nBehind+req.Header.Height > app.watcher.NetworkSmartHeight() {
+	for nBehind > 0 && nBehind+h > app.watcher.NetworkSmartHeight() {
 		// zeniqsmartRpcClient=zeniqsmart-rpc-url=ZeniqsmartRPCUrl
 		// assumed to have BlocksBehind=0
 		// as we get current height from there
 		time.Sleep(time.Duration(3 * time.Second))
 	}
 
-	for {
-		// Don't even start smart block processing
-		// unless mainnet is reachable and enough blocks have been fetched.
-		// When ccrpc becomes active we are already rolling. No need to wait there.
-		var wTS int64 = app.watcher.GetCurrMainnetBlockTimestamp() + 12*3600
-		if app.block.Timestamp <= wTS || app.config.AppConfig.CCRPCForkBlock == 0 {
-			break
+	CCRPCForkBlock := app.GetCCRPCForkBlock()
+	// When ccrpc becomes active we are already rolling. No need to wait there.
+	if h < CCRPCForkBlock {
+		for {
+			// Don't even start smart block processing
+			// unless mainnet is reachable and enough blocks have been fetched.
+			wTS := app.watcher.GetCurrMainnetBlockTimestamp() + 12*3600
+			if app.block.Timestamp <= wTS {
+				break
+			}
+			app.logger.Info(fmt.Sprintf(
+				"catchup... block timestamp %v waiting for watcher %v", app.block.Timestamp, wTS))
+			time.Sleep(time.Duration(30 * time.Second))
 		}
-		app.logger.Info(fmt.Sprintf(
-			"catchup... block timestamp %v waiting for watcher %v", app.block.Timestamp, wTS))
-		time.Sleep(time.Duration(30 * time.Second))
 	}
 
 	app.block = &types.Block{
@@ -699,10 +711,10 @@ func (app *App) Commit() abcitypes.ResponseCommit {
 	if app.currHeight < CCRPCForkBlock {
 		app.updateValidatorsAndStakingInfo(ctx)
 	} else {
-		if endBlockTime := app.CCRPC.CCRPCProcessed(ctx, app.GetLatestBlockNum(), nil); endBlockTime > 0 {
+		if doneApply := app.CCRPC.CCRPCProcessed(ctx, app.GetLatestBlockNum(), nil); doneApply > 0 {
 			app.logger.Debug(fmt.Sprintf(
-				"Processed ccrpc up to incl. mainnet time %d at smart block %d with time %d",
-				endBlockTime,
+				"ccrpc: crosschain up to smart height %d applied at %d with time %d",
+				doneApply,
 				app.block.Number,
 				app.block.Timestamp,
 			))
@@ -766,7 +778,7 @@ func (app *App) updateValidatorsAndStakingInfo(ctx *types.Context) {
 	if param.IsAmber && ctx.IsXHedgeFork() {
 		//make fake epoch after xHedgeFork, change amber to pure pos
 		if (app.currHeight%param.AmberBlocksInEpochAfterXHedgeFork == 0) && (app.currHeight > (ctx.XHedgeForkBlock + param.AmberBlocksInEpochAfterXHedgeFork/2)) {
-			e := &stakingtypes.Epoch{}
+			e := &stake.Epoch{}
 			app.epochList = append(app.epochList, e)
 			app.logger.Debug("Get new fake epoch")
 			select {
@@ -813,7 +825,7 @@ func (app *App) updateValidatorsAndStakingInfo(ctx *types.Context) {
 	if param.IsAmber && app.currHeight == 4435201 {
 		app.validatorUpdate = nil
 	} else {
-		app.validatorUpdate = stakingtypes.GetUpdateValidatorSet(currValidators, newValidators)
+		app.validatorUpdate = stake.GetUpdateValidatorSet(currValidators, newValidators)
 	}
 	for _, v := range app.validatorUpdate {
 		app.logger.Debug(fmt.Sprintf("Updated validator in commit: address(%s), pubkey(%s), voting power: %d",
@@ -831,34 +843,38 @@ func (app *App) updateValidatorsAndStakingInfo(ctx *types.Context) {
 }
 
 func (app *App) syncBlockInfo() *types.BlockInfo {
-	bi := &types.BlockInfo{
+	currBlock := &types.BlockInfo{
 		Coinbase:  app.block.Miner,
 		Number:    app.block.Number,
 		Timestamp: app.block.Timestamp,
 		ChainId:   app.chainId.Bytes32(),
 		Hash:      app.block.Hash,
-		Revision:  app.fromHeightRevision(app.block.Number),
+		/* EIP1559?
+		BaseFeePerGas: defaultBaseFeePerGas,
+		BaseFeeBlob:   defaultBaseFeeBlob,
+		*/
+		Revision: app.fromHeightRevision(app.block.Number),
 	}
-	app.blockInfo.Store(bi)
-	app.logger.Debug(fmt.Sprintf("blockInfo: [height:%d, hash:%s]", bi.Number, gethcmn.Hash(bi.Hash).Hex()))
-	return bi
+	app.currBlock.Store(currBlock)
+	app.logger.Debug(fmt.Sprintf("blockInfo: [height:%d, hash:%s]", currBlock.Number, gethcmn.Hash(currBlock.Hash).Hex()))
+	return currBlock
 }
 
 func (app *App) LoadBlockInfo() *types.BlockInfo {
-	return app.blockInfo.Load().(*types.BlockInfo)
+	return app.currBlock.Load().(*types.BlockInfo)
 }
 
-func (app *App) postCommit(bi *types.BlockInfo) {
+func (app *App) postCommit(currBlock *types.BlockInfo) {
 	defer app.mtx.Unlock()
-	if bi != nil {
-		if bi.Number > 1 {
-			hash := app.historyStore.GetBlockHashByHeight(bi.Number - 1)
+	if currBlock != nil {
+		if currBlock.Number > 1 {
+			hash := app.historyStore.GetBlockHashByHeight(currBlock.Number - 1)
 			if hash == [32]byte{} {
-				app.logger.Debug(fmt.Sprintf("postcommit blockInfo: height:%d, blockHash:%s", bi.Number-1, gethcmn.Hash(hash).Hex()))
+				app.logger.Debug(fmt.Sprintf("postcommit blockInfo: height:%d, blockHash:%s", currBlock.Number-1, gethcmn.Hash(hash).Hex()))
 			}
 		}
 	}
-	app.txEngine.Execute(bi)
+	app.txEngine.Execute(currBlock)
 	app.lastGasUsed, app.lastGasRefund, app.lastGasFee = app.txEngine.GasUsedInfo()
 }
 
@@ -1059,22 +1075,26 @@ func (app *App) RunTxForRpc(gethTx *gethtypes.Transaction, sender gethcmn.Addres
 	ctx := app.GetRpcContextAtHeight(height)
 	defer ctx.Close(false)
 	runner := ebp.NewTxRunner(ctx, txToRun)
-	bi := app.blockInfo.Load().(*types.BlockInfo)
+	currBlock := app.currBlock.Load().(*types.BlockInfo)
 	if height > 0 {
 		blk, err := ctx.GetBlockByHeight(uint64(height))
 		if err != nil {
 			return nil, 0
 		}
-		bi = &types.BlockInfo{
+		currBlock = &types.BlockInfo{
 			Coinbase:  blk.Miner,
 			Number:    blk.Number,
 			Timestamp: blk.Timestamp,
 			ChainId:   app.chainId.Bytes32(),
 			Hash:      blk.Hash,
-			Revision:  app.fromHeightRevision(blk.Number),
+			/* EIP1559?
+			BaseFeePerGas: defaultBaseFeePerGas,
+			BaseFeeBlob:   defaultBaseFeeBlob,
+			*/
+			Revision: app.fromHeightRevision(blk.Number),
 		}
 	}
-	estimateResult := ebp.RunTxForRpc(bi, estimateGas, runner)
+	estimateResult := ebp.RunTxForRpc(currBlock, estimateGas, runner)
 	return runner, estimateResult
 }
 
@@ -1095,15 +1115,19 @@ func (app *App) RunTxForSbchRpc(gethTx *gethtypes.Transaction, sender gethcmn.Ad
 	if err != nil {
 		return nil, 0
 	}
-	bi := &types.BlockInfo{
+	currBlock := &types.BlockInfo{
 		Coinbase:  blk.Miner,
 		Number:    blk.Number,
 		Timestamp: blk.Timestamp,
 		ChainId:   app.chainId.Bytes32(),
 		Hash:      blk.Hash,
-		Revision:  app.fromHeightRevision(blk.Number),
+		/* EIP1559?
+		BaseFeePerGas: defaultBaseFeePerGas,
+		BaseFeeBlob:   defaultBaseFeeBlob,
+		*/
+		Revision: app.fromHeightRevision(blk.Number),
 	}
-	estimateResult := ebp.RunTxForRpc(bi, false, runner)
+	estimateResult := ebp.RunTxForRpc(currBlock, false, runner)
 	return runner, estimateResult
 }
 
@@ -1137,7 +1161,7 @@ func (app *App) GetValidatorsInfo() ValidatorsInfo {
 
 func (app *App) getValidatorsInfoFromCtx(ctx *types.Context) ValidatorsInfo {
 	stakingInfo := staking.LoadStakingInfo(ctx)
-	currValidators := stakingtypes.GetActiveValidators(stakingInfo.Validators, staking.MinimumStakingAmount)
+	currValidators := stake.GetActiveValidators(stakingInfo.Validators, staking.MinimumStakingAmount)
 	minGasPrice := staking.LoadMinGasPrice(ctx, false)
 	lastMinGasPrice := staking.LoadMinGasPrice(ctx, true)
 	return NewValidatorsInfo(currValidators, stakingInfo, minGasPrice, lastMinGasPrice)
@@ -1147,14 +1171,14 @@ func (app *App) IsArchiveMode() bool {
 	return app.config.AppConfig.ArchiveMode
 }
 
-func (app *App) GetCurrEpoch() *stakingtypes.Epoch {
+func (app *App) GetCurrEpoch() *stake.Epoch {
 	return app.watcher.GetCurrEpoch()
 }
 
-func (app *App) GetAppEpochList() []*stakingtypes.Epoch {
-	return stakingtypes.CopyEpochs(app.epochList)
+func (app *App) GetAppEpochList() []*stake.Epoch {
+	return stake.CopyEpochs(app.epochList)
 }
-func (app *App) GetWatcherEpochList() []*stakingtypes.Epoch {
+func (app *App) GetWatcherEpochList() []*stake.Epoch {
 	return app.watcher.GetEpochList()
 }
 

@@ -53,6 +53,7 @@ type AppConfig struct {
 	MainnetRPCPassword string `mapstructure:"mainnet-rpc-password"`
 	ZeniqsmartRPCUrl   string `mapstructure:"zeniqsmart-rpc-url"`
 	Speedup            bool   `mapstructure:"watcher-speedup"`
+	Testing            bool   `mapstructure:"watcher-speedup"`
 
 	FrontierGasLimit uint64 `mapstructure:"frontier-gaslimit"`
 
@@ -101,6 +102,7 @@ func DefaultAppConfigWithHome(home string) *AppConfig {
 		MainnetRPCPassword:      "zeniq123",
 		ZeniqsmartRPCUrl:        "",
 		Speedup:                 true,
+		Testing:                 false,
 		FrontierGasLimit:        uint64(BlockMaxGas / 200), //5Million gas
 		ArchiveMode:             false,
 		WithSyncDB:              false,

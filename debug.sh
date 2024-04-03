@@ -10,11 +10,9 @@ gdb -args build/zeniqsmartd_debug start
 
 '
 
-THS=$PWD
-if [[ "${THS##*/}" != "zeniq-smart-chain" ]]; then
-    cd "zeniq-smart-chain"
-    THS=$THS/zeniq-smart-chain
-fi
+THS="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+cd $THS
+
 BD=$THS/build
 
 export CGO_LDFLAGS="-L$BD/zstd/lib -L$BD/bz2 -L$BD/lz4/lib -L$BD/snappy/build -L$BD/rocksdb -L$BD/zlib -L$BD/../evm-zeniq-smart-chain/evmwrap/host_bridge -lrocksdb -lsnappy -llz4 -lbz2 -lzstd -lz -lstdc++ -lm"

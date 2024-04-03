@@ -2,12 +2,7 @@
 
 set -e
 
-THS=$PWD
-if [[ "${THS##*/}" != "zeniq-smart-chain" ]]; then
-    cd "zeniq-smart-chain"
-    THS=$THS/zeniq-smart-chain
-fi
-BD=$THS/build
+BD=${0%/*}/build
 pushd $BD
 
 LZ4="1.9.4"

@@ -8,16 +8,11 @@ Usage:
 ./run_from_h0.sh
 # else 
 ./run_from_h0.sh testnodes/node0
-
-Variables:
-
-- $ZENIQRPCPORT: default 57319
-
 '
 
 set -e
 
-THS=$PWD
+THS="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 if [[ "${THS##*/}" != "zeniq-smart-chain" ]]; then
     cd "zeniq-smart-chain"
     THS=$THS/zeniq-smart-chain
@@ -59,14 +54,13 @@ mv ./priv_validator_key.json $NODE_HOME/config/
 
 $BD/zeniqsmartd add-genesis-validator --home=$NODE_HOME $VAL
 
-zeniqrpcport=${ZENIQRPCPORT:-57319}
-BC_1="$(http --auth zeniq:zeniq123 http://172.17.0.1:$zeniqrpcport method=getblockcount params:='[]' | grep result | jq -r .result)"
-BC=$(echo 1+"$BC_1" | bc)
+BC_1="$(http --auth zeniq:zeniq123 http://172.17.0.1:57319 method=getblockcount params:='[]' | grep result | jq -r .result)"
+BC=$((1+BC_1))
 echo "$BC will be first mainnet block of ccrpc epoch 0"
 
 sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[$BC,1]]/g" $NODE_HOME/config/app.toml
 sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" $NODE_HOME/config/app.toml
-sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:$zeniqrpcport\"/g" $NODE_HOME/config/app.toml
+sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $NODE_HOME/config/app.toml
 
 $BD/zeniqsmartd start --home $NODE_HOME --unlock $TEST_KEYS --https.addr=off --wss.addr=off \
   --http.api='eth,web3,net,txpool,sbch,debug' \

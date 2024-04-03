@@ -6,7 +6,7 @@ import (
 
 	dbtypes "github.com/zeniqsmart/db-zeniq-smart-chain/types"
 	evmtc "github.com/zeniqsmart/evm-zeniq-smart-chain/evmwrap/testcase"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 func (app *App) Logger() log.Logger {
@@ -34,7 +34,7 @@ func (app *App) CloseTxEngineContext() {
 	app.txEngine.Context().Close(false)
 }
 
-func (app *App) AddEpochForTest(e *stakingtypes.Epoch) { // breaks normal function, only used in test
+func (app *App) AddEpochForTest(e *stake.Epoch) { // breaks normal function, only used in test
 	app.watcher.EpochChan <- e
 }
 

@@ -11,34 +11,34 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/app"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 type CallDetail struct {
 	Status                 int
 	GasUsed                uint64
 	OutData                []byte
-	Logs                   []motypes.EvmLog
+	Logs                   []types.EvmLog
 	CreatedContractAddress common.Address
-	InternalTxCalls        []motypes.InternalTxCall
-	InternalTxReturns      []motypes.InternalTxReturn
-	RwLists                *motypes.ReadWriteLists
+	InternalTxCalls        []types.InternalTxCall
+	InternalTxReturns      []types.InternalTxReturn
+	RwLists                *types.ReadWriteLists
 }
 
 type FilterService interface {
-	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*motypes.Header, error)
-	HeaderByHash(ctx context.Context, blockHash common.Hash) (*motypes.Header, error)
+	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
+	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockNum uint64) (gethtypes.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*gethtypes.Log, error)
 
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
-	SubscribeChainEvent(ch chan<- motypes.ChainEvent) event.Subscription
+	SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
-	//SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
+	//SubscribePendingLogsEvent(ch chan<- []*stake.Log) event.Subscription
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
@@ -60,36 +60,36 @@ type BackendService interface {
 	// Blockchain API
 	ChainId() *big.Int
 	//SetHead(number uint64)
-	//HeaderByNumber(ctx context.Context, number int64) (*types.Header, error)
-	//HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
-	//HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
-	//CurrentHeader() *types.Header
+	//HeaderByNumber(ctx context.Context, number int64) (*stake.Header, error)
+	//HeaderByHash(ctx context.Context, hash common.Hash) (*stake.Header, error)
+	//HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stake.Header, error)
+	//CurrentHeader() *stake.Header
 	LatestHeight() int64
-	CurrentBlock() (*motypes.Block, error)
-	BlockByNumber(number int64) (*motypes.Block, error)
-	BlockByHash(hash common.Hash) (*motypes.Block, error)
-	//BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
+	CurrentBlock() (*types.Block, error)
+	BlockByNumber(number int64) (*types.Block, error)
+	BlockByHash(hash common.Hash) (*types.Block, error)
+	//BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stake.Block, error)
 	//StateAndHeaderByNumber(ctx context.Context, number int64) (*state.StateDB, error)
-	//StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
-	//GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) /*All receipt fields is in types.Transaction, use getTransaction() instead*/
+	//StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *stake.Header, error)
+	//GetReceipts(ctx context.Context, hash common.Hash) (stake.Receipts, error) /*All receipt fields is in stake.Transaction, use getTransaction() instead*/
 	//GetTd(ctx context.Context, hash common.Hash) *big.Int
-	//GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error)
+	//GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *stake.Header) (*vm.EVM, func() error, error)
 
 	// Transaction pool API
 	SendRawTx(signedTx []byte) (common.Hash, error)
-	GetTransaction(txHash common.Hash) (tx *motypes.Transaction, sig [65]byte, err error)
-	//GetPoolTransactions() (types.Transactions, error)
-	//GetPoolTransaction(txHash common.Hash) *types.Transaction
+	GetTransaction(txHash common.Hash) (tx *types.Transaction, sig [65]byte, err error)
+	//GetPoolTransactions() (stake.Transactions, error)
+	//GetPoolTransaction(txHash common.Hash) *stake.Transaction
 	//GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	//Stats() (pending int, queued int)
-	//TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
+	//TxPoolContent() (map[common.Address]stake.Transactions, map[common.Address]stake.Transactions)
 
 	// Filter API
 	//BloomStatus() (uint64, uint64)
-	//GetLogs(blockHash common.Hash) ([][]types.Log, error)
+	//GetLogs(blockHash common.Hash) ([][]stake.Log, error)
 	//ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
-	//SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
-	//SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
+	//SubscribeLogsEvent(ch chan<- []*stake.Log) event.Subscription
+	//SubscribePendingLogsEvent(ch chan<- []*stake.Log) event.Subscription
 	//SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	//SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	//SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
@@ -106,20 +106,20 @@ type BackendService interface {
 	Call(tx *gethtypes.Transaction, from common.Address, height int64) (statusCode int, retData []byte)
 	CallForSbch(tx *gethtypes.Transaction, sender common.Address, height int64) *CallDetail
 	EstimateGas(tx *gethtypes.Transaction, from common.Address, height int64) (statusCode int, retData []byte, gas int64)
-	QueryLogs(addresses []common.Address, topics [][]common.Hash, startHeight, endHeight uint32, filter motypes.FilterFunc) ([]motypes.Log, error)
-	QueryTxBySrc(address common.Address, startHeight, endHeight, limit uint32) (tx []*motypes.Transaction, sigs [][65]byte, err error)
-	QueryTxByDst(address common.Address, startHeight, endHeight, limit uint32) (tx []*motypes.Transaction, sigs [][65]byte, err error)
-	QueryTxByAddr(address common.Address, startHeight, endHeight, limit uint32) (tx []*motypes.Transaction, sigs [][65]byte, err error)
-	SbchQueryLogs(addr common.Address, topics []common.Hash, startHeight, endHeight, limit uint32) ([]motypes.Log, error)
-	GetTxListByHeight(height uint32) (tx []*motypes.Transaction, sigs [][65]byte, err error)
-	GetTxListByHeightWithRange(height uint32, start, end int) (tx []*motypes.Transaction, sigs [][65]byte, err error)
+	QueryLogs(addresses []common.Address, topics [][]common.Hash, startHeight, endHeight uint32, filter types.FilterFunc) ([]types.Log, error)
+	QueryTxBySrc(address common.Address, startHeight, endHeight, limit uint32) (tx []*types.Transaction, sigs [][65]byte, err error)
+	QueryTxByDst(address common.Address, startHeight, endHeight, limit uint32) (tx []*types.Transaction, sigs [][65]byte, err error)
+	QueryTxByAddr(address common.Address, startHeight, endHeight, limit uint32) (tx []*types.Transaction, sigs [][65]byte, err error)
+	SbchQueryLogs(addr common.Address, topics []common.Hash, startHeight, endHeight, limit uint32) ([]types.Log, error)
+	GetTxListByHeight(height uint32) (tx []*types.Transaction, sigs [][65]byte, err error)
+	GetTxListByHeightWithRange(height uint32, start, end int) (tx []*types.Transaction, sigs [][65]byte, err error)
 	GetFromAddressCount(addr common.Address) int64
 	GetToAddressCount(addr common.Address) int64
 	GetSep20ToAddressCount(contract common.Address, addr common.Address) int64
 	GetSep20FromAddressCount(contract common.Address, addr common.Address) int64
-	GetEpochs(start, end uint64) ([]*types.Epoch, error)
-	GetEpochList(from string) ([]*types.Epoch, error)
-	GetCurrEpoch() *types.Epoch
+	GetEpochs(start, end uint64) ([]*stake.Epoch, error)
+	GetEpochList(from string) ([]*stake.Epoch, error)
+	GetCurrEpoch() *stake.Epoch
 	GetCCEpochs(start, end uint64) ([]*cctypes.CCEpoch, error)
 	GetSeq(address common.Address) uint64
 	GetPosVotes() map[[32]byte]*big.Int

@@ -6,7 +6,7 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 type Validator struct {
@@ -25,10 +25,10 @@ type GenesisData struct {
 	Alloc      gethcore.GenesisAlloc `json:"alloc"`
 }
 
-func (g GenesisData) StakingValidators() []*stakingtypes.Validator {
-	ret := make([]*stakingtypes.Validator, len(g.Validators))
+func (g GenesisData) StakingValidators() []*stake.Validator {
+	ret := make([]*stake.Validator, len(g.Validators))
 	for i, v := range g.Validators {
-		ret[i] = &stakingtypes.Validator{
+		ret[i] = &stake.Validator{
 			Address:      v.Address,
 			Pubkey:       v.Pubkey,
 			RewardTo:     v.RewardTo,
@@ -41,7 +41,7 @@ func (g GenesisData) StakingValidators() []*stakingtypes.Validator {
 	return ret
 }
 
-func FromStakingValidators(vs []*stakingtypes.Validator) []*Validator {
+func FromStakingValidators(vs []*stake.Validator) []*Validator {
 	ret := make([]*Validator, len(vs))
 	for i, v := range vs {
 		ret[i] = FromStakingValidator(v)
@@ -49,7 +49,7 @@ func FromStakingValidators(vs []*stakingtypes.Validator) []*Validator {
 	return ret
 }
 
-func FromStakingValidator(v *stakingtypes.Validator) *Validator {
+func FromStakingValidator(v *stake.Validator) *Validator {
 	return &Validator{
 		Address:      v.Address,
 		Pubkey:       v.Pubkey,

@@ -57,6 +57,8 @@ zeniqsmart-rpc-url = "{{ .ZeniqsmartRPCUrl }}"
 # open epoch get to speedup mainnet block catch, work with "zeniqsmart_rpc_url"
 watcher-speedup = {{ .Speedup }}
 
+testing = {{ .Testing }}
+
 frontier-gaslimit = {{ .FrontierGasLimit }}
 
 archive-mode = {{ .ArchiveMode }}

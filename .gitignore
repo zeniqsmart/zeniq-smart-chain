@@ -1,8 +1,42 @@
-build
-**/*.test
-ccrpc/*data/
-testdata/sol/node_modules
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.o
+*.a
 
-node*
-testnodes
+# Test binary, built with `go test -c`
+*.test
 
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+.idea
+build/
+.build/
+data/
+rocksdb.db/
+rpc/api/testdbdata
+.DS_Store
+*.swp
+*.log
+
+node_modules/
+staking/showopreturn/showopreturn
+staking/mocknode/mocknode
+cmd/zeniqsmartd/zeniqsmartd
+
+private/
+app/stresstest/stresstest
+*.bak
+testdbdata/
+keys*.txt
+cmd/stresstest/stresstest
+
+testnodes/
+**/artifacts/
+**/cache/

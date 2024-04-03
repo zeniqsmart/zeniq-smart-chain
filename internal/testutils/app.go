@@ -31,7 +31,7 @@ import (
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 	wtypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
@@ -63,7 +63,7 @@ func (m MockRpcClient) NetworkSmartHeight() int64                               
 func (m MockRpcClient) GetMainnetHeight() (height int64)                           { return 1 }
 func (m MockRpcClient) GetBlockByHeight(height int64, retry bool) *wtypes.BCHBlock { return nil }
 func (m MockRpcClient) GetBlockByHash(hash [32]byte) *wtypes.BCHBlock              { return nil }
-func (m MockRpcClient) GetEpochs(start, end uint64) []*stakingtypes.Epoch          { return nil }
+func (m MockRpcClient) GetEpochs(start, end uint64) []*stake.Epoch                 { return nil }
 func (m MockRpcClient) GetCCEpochs(start, end uint64) []*cctypes.CCEpoch           { return nil }
 func (m MockRpcClient) FetchCC(first, last int64) (cc *ccrpctypes.CCrpcEpoch)      { return nil }
 func (m MockRpcClient) IsConnected() bool                                          { return true }

@@ -19,11 +19,10 @@ sudo ./docker_build.sh
 
 '
 
+THS="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+cd $THS
 
-ZRT=$PWD
-if [[ "${ZRT##*/}" == "zeniq-smart-chain" ]]; then
-    ZRT=${ZRT%/*}
-fi
+zeniq_smart=${THS%/*}
 
 sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" go.mod
 sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../db-zeniq-smart-chain/go.mod
@@ -33,4 +32,4 @@ go fmt ./...
 go generate ./...
 docker build -t zeniqsmart .
 # then start the container mapping host, e.g. ~/smartzeniq to the container's /zeniq_smart using
-docker run -t -v $ZRT:/zeniq_smart zeniqsmart zeniq-smart-chain/build.sh
+docker run -t -v $zeniq_smart:/zeniq_smart zeniqsmart zeniq-smart-chain/build.sh

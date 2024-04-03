@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 )
@@ -23,7 +23,7 @@ const (
 type RpcClient interface {
 	// smart
 	NetworkSmartHeight() int64
-	GetEpochs(start, end uint64) []*stakingtypes.Epoch
+	GetEpochs(start, end uint64) []*stake.Epoch
 	GetCCEpochs(start, end uint64) []*cctypes.CCEpoch
 	// mainnet
 	IsConnected() bool
@@ -41,7 +41,7 @@ type BCHBlock struct {
 	Timestamp       int64
 	HashId          [32]byte
 	ParentBlk       [32]byte
-	Nominations     []stakingtypes.Nomination
+	Nominations     []stake.Nomination
 	CCTransferInfos []*cctypes.CCTransferInfo
 }
 

@@ -4,7 +4,7 @@ import (
 	"github.com/holiman/uint256"
 
 	gethcmn "github.com/ethereum/go-ethereum/common"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 type ValidatorsInfo struct {
@@ -29,8 +29,8 @@ type PendingReward struct {
 	Amount   string          `json:"amount"`
 }
 
-func NewValidatorsInfo(currValidators []*stakingtypes.Validator,
-	stakingInfo stakingtypes.StakingInfo,
+func NewValidatorsInfo(currValidators []*stake.Validator,
+	stakingInfo stake.StakingInfo,
 	minGasPrice, lastMinGasPrice uint64) ValidatorsInfo {
 
 	info := ValidatorsInfo{

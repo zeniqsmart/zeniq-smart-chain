@@ -15,7 +15,7 @@
 proxy_app = "tcp://127.0.0.1:26658"
 
 # A custom human readable name for this node
-moniker = "smarttestroland0"
+moniker = "mysmarttestnode0"
 
 # If this node is many blocks behind the tip of the chain, FastSync
 # allows them to catchup quickly by downloading blocks in parallel
@@ -194,7 +194,7 @@ addr_book_file = "config/addrbook.json"
 
 # Set true for strict address routability rules
 # Set false for private or local networks
-addr_book_strict = true
+addr_book_strict = false
 
 # Maximum number of inbound peers
 max_num_inbound_peers = 40

@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/tendermint/tendermint/libs/log"
 
 	crosschain "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
@@ -33,8 +34,8 @@ type Watcher struct {
 
 	heightToFinalizedBlock map[int64]*types.BCHBlock
 
-	EpochChan          chan *stakingtypes.Epoch
-	epochList          []*stakingtypes.Epoch
+	EpochChan          chan *stake.Epoch
+	epochList          []*stake.Epoch
 	numBlocksInEpoch   int64
 	lastEpochEndHeight int64
 	lastKnownEpochNum  int64
@@ -50,7 +51,7 @@ type Watcher struct {
 
 	chainConfig *param.ChainConfig
 
-	currentMainnetBlockTimestamp int64
+	currentMainnetBlockTimestamp atomic.Int64
 }
 
 func NewWatcher(logger log.Logger, lastHeight, lastCCEpochEndHeight int64,
@@ -58,7 +59,7 @@ func NewWatcher(logger log.Logger, lastHeight, lastCCEpochEndHeight int64,
 	if rpcclient == nil {
 		rpcclient = NewRpcClient(chainConfig.AppConfig.MainnetRPCUrl, chainConfig.AppConfig.MainnetRPCUsername, chainConfig.AppConfig.MainnetRPCPassword, "text/plain;", logger)
 	}
-	return &Watcher{
+	w := &Watcher{
 		logger: logger,
 
 		rpcClient:           rpcclient,
@@ -69,9 +70,9 @@ func NewWatcher(logger log.Logger, lastHeight, lastCCEpochEndHeight int64,
 		lastKnownEpochNum:     lastKnownEpochNum,
 
 		heightToFinalizedBlock: make(map[int64]*types.BCHBlock),
-		epochList:              make([]*stakingtypes.Epoch, 0, 10),
+		epochList:              make([]*stake.Epoch, 0, 10),
 
-		EpochChan: make(chan *stakingtypes.Epoch, 10000),
+		EpochChan: make(chan *stake.Epoch, 10000),
 
 		numBlocksInEpoch:       param.StakingNumBlocksInEpoch,
 		numBlocksToClearMemory: NumBlocksToClearMemory,
@@ -83,9 +84,12 @@ func NewWatcher(logger log.Logger, lastHeight, lastCCEpochEndHeight int64,
 		numBlocksInCCEpoch:   param.BlocksInCCEpoch,
 
 		chainConfig: chainConfig,
-		// set big enough for single node startup when no BCH node connected. it will be updated when mainnet block finalize.
-		currentMainnetBlockTimestamp: math.MaxInt64 - 14*24*3600,
 	}
+
+	// set big enough for single node startup when no BCH node connected. it will be updated when mainnet block finalize.
+	w.currentMainnetBlockTimestamp.Store(math.MaxInt64 - 14*24*3600)
+
+	return w
 }
 
 func (watcher *Watcher) NetworkSmartHeight() int64 {
@@ -246,7 +250,7 @@ func (watcher *Watcher) suspended(delayDuration time.Duration) {
 func (watcher *Watcher) addFinalizedBlock(blk *types.BCHBlock) {
 	watcher.heightToFinalizedBlock[blk.Height] = blk
 	watcher.latestFinalizedHeight++
-	watcher.currentMainnetBlockTimestamp = blk.Timestamp
+	watcher.currentMainnetBlockTimestamp.Store(blk.Timestamp)
 
 	if watcher.latestFinalizedHeight-watcher.lastEpochEndHeight == watcher.numBlocksInEpoch {
 		watcher.generateNewEpoch()
@@ -266,12 +270,12 @@ func (watcher *Watcher) generateNewEpoch() {
 	watcher.ClearOldData()
 }
 
-func (watcher *Watcher) buildNewEpoch() *stakingtypes.Epoch {
-	epoch := &stakingtypes.Epoch{
+func (watcher *Watcher) buildNewEpoch() *stake.Epoch {
+	epoch := &stake.Epoch{
 		StartHeight: watcher.lastEpochEndHeight + 1,
-		Nominations: make([]*stakingtypes.Nomination, 0, 10),
+		Nominations: make([]*stake.Nomination, 0, 10),
 	}
-	var valMapByPubkey = make(map[[32]byte]*stakingtypes.Nomination)
+	var valMapByPubkey = make(map[[32]byte]*stake.Nomination)
 	for i := epoch.StartHeight; i <= watcher.latestFinalizedHeight; i++ {
 		blk, ok := watcher.heightToFinalizedBlock[i]
 		if !ok {
@@ -295,17 +299,17 @@ func (watcher *Watcher) buildNewEpoch() *stakingtypes.Epoch {
 	return epoch
 }
 
-func (watcher *Watcher) GetCurrEpoch() *stakingtypes.Epoch {
+func (watcher *Watcher) GetCurrEpoch() *stake.Epoch {
 	return watcher.buildNewEpoch()
 }
-func (watcher *Watcher) GetEpochList() []*stakingtypes.Epoch {
-	list := stakingtypes.CopyEpochs(watcher.epochList)
+func (watcher *Watcher) GetEpochList() []*stake.Epoch {
+	list := stake.CopyEpochs(watcher.epochList)
 	currEpoch := watcher.buildNewEpoch()
 	return append(list, currEpoch)
 }
 
 func (watcher *Watcher) GetCurrMainnetBlockTimestamp() int64 {
-	return watcher.currentMainnetBlockTimestamp
+	return watcher.currentMainnetBlockTimestamp.Load()
 }
 
 //func (watcher *Watcher) generateNewCCEpoch() {
@@ -343,14 +347,14 @@ func (watcher *Watcher) CheckMainnet() {
 	}
 	watcher.logger.Info("Checking zeniq deamon GetMainnetHeight()")
 	latestHeight := watcher.rpcClient.GetMainnetHeight()
-	if latestHeight <= 0 {
+	if latestHeight < 0 {
 		panic("Watcher GetMainnetHeight failed.")
 	}
 }
 
 // sort by pubkey (small to big) first; then sort by nominationCount;
 // so nominations sort by NominationCount, if count is equal, smaller pubkey stand front
-func sortEpochNominations(epoch *stakingtypes.Epoch) {
+func sortEpochNominations(epoch *stake.Epoch) {
 	sort.Slice(epoch.Nominations, func(i, j int) bool {
 		return bytes.Compare(epoch.Nominations[i].Pubkey[:], epoch.Nominations[j].Pubkey[:]) < 0
 	})

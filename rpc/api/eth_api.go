@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"sort"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +23,21 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/ethutils"
 	rpctypes "github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
+) /* EIP1559?
+	"fmt"
+	"os"
 )
+
+func logtx2(s string) {
+	file, err := os.OpenFile("test_tx2.log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	file.WriteString(s)
+	file.WriteString("\n---\n")
+}
+*/
 
 const (
 	// DefaultGasPrice is default gas price for evm transactions
@@ -46,6 +61,15 @@ var (
 	errPendingBlockNum = errors.New("pending block is not supported")
 	errFutureBlockNum  = errors.New("block has not been mined")
 )
+
+/* EIP1559?
+type TypeFeeHistory struct {
+	OldestBlock  *big.Int     // block corresponding to first response value
+	Reward       [][]*big.Int // list every txs priority fee per block
+	BaseFee      []*big.Int   // list of each block's base fee
+	GasUsedRatio []float64    // ratio of gas used out of the total available limit
+}
+*/
 
 type PublicEthAPI interface {
 	Accounts() ([]common.Address, error)
@@ -75,6 +99,11 @@ type PublicEthAPI interface {
 	SendRawTransaction(data hexutil.Bytes) (common.Hash, error) // ?
 	SendTransaction(args rpctypes.SendTxArgs) (common.Hash, error)
 	Syncing() (interface{}, error)
+	/*
+		 EIP1559?
+			FeeHistory(blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*TypeFeeHistory, error)
+			MaxPriorityFeePerGas() (*hexutil.Big, error)
+	*/
 }
 
 type ethAPI struct {
@@ -95,6 +124,9 @@ func newEthAPI(backend sbchapi.BackendService, testKeys []string, logger log.Log
 func loadTestAccounts(testKeys []string, logger log.Logger) map[common.Address]*ecdsa.PrivateKey {
 	accs := make(map[common.Address]*ecdsa.PrivateKey, len(testKeys))
 	for _, testKey := range testKeys {
+		if len(strings.Trim(testKey, " ")) == 0 {
+			continue
+		}
 		if key, _, err := ethutils.HexToPrivKey(testKey); err == nil {
 			addr := crypto.PubkeyToAddress(key.PublicKey)
 			accs[addr] = key
@@ -405,6 +437,7 @@ func (api *ethAPI) ProtocolVersion() hexutil.Uint {
 func (api *ethAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 	api.logger.Debug("eth_sendRawTransaction")
 	tx, err := ethutils.DecodeTx(data)
+	// EIP1559? logtx2(fmt.Sprintf("tx %v err %v \n %s", tx, err, data.String()))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -416,6 +449,23 @@ func (api *ethAPI) SendRawTransaction(data hexutil.Bytes) (common.Hash, error) {
 
 	return tx.Hash(), nil
 }
+
+/* EIP1559?
+func (api *ethAPI) FeeHistory(blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*TypeFeeHistory, error) {
+	fh := TypeFeeHistory{
+		OldestBlock:  (*big.Int)(big.NewInt(0)),
+		Reward:       make([][]*big.Int, 1),
+		BaseFee:      make([]*big.Int, 1),
+		GasUsedRatio: make([]float64, 1),
+	}
+	return &fh, nil
+}
+
+func (api *ethAPI) MaxPriorityFeePerGas() (*hexutil.Big, error) {
+	mpfpg := (*hexutil.Big)(big.NewInt(1000000000))
+	return mpfpg, nil
+}
+*/
 
 // https://eth.wiki/json-rpc/API#eth_sendTransaction
 func (api *ethAPI) SendTransaction(args rpctypes.SendTxArgs) (common.Hash, error) {

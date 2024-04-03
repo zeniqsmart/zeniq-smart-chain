@@ -20,7 +20,7 @@ import (
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 var _ BackendService = &apiBackend{}
@@ -260,19 +260,19 @@ func (backend *apiBackend) GetSep20FromAddressCount(contract common.Address, add
 	return ctx.GetSep20FromAddressCount(contract, addr)
 }
 
-func (backend *apiBackend) GetCurrEpoch() *stakingtypes.Epoch {
+func (backend *apiBackend) GetCurrEpoch() *stake.Epoch {
 	return backend.app.GetCurrEpoch()
 }
 
 // [start, end)
-func (backend *apiBackend) GetEpochs(start, end uint64) ([]*stakingtypes.Epoch, error) {
+func (backend *apiBackend) GetEpochs(start, end uint64) ([]*stake.Epoch, error) {
 	if start >= end {
 		return nil, errors.New("invalid start or empty epochs")
 	}
 	ctx := backend.app.GetRpcContext()
 	defer ctx.Close(false)
 
-	result := make([]*stakingtypes.Epoch, 0, end-start)
+	result := make([]*stake.Epoch, 0, end-start)
 	info := staking.LoadStakingInfo(ctx)
 	for epochNum := int64(start); epochNum < int64(end) && epochNum <= info.CurrEpochNum; epochNum++ {
 		epoch, ok := staking.LoadEpoch(ctx, epochNum)
@@ -283,7 +283,7 @@ func (backend *apiBackend) GetEpochs(start, end uint64) ([]*stakingtypes.Epoch, 
 	return result, nil
 }
 
-func (backend *apiBackend) GetEpochList(from string) ([]*stakingtypes.Epoch, error) {
+func (backend *apiBackend) GetEpochList(from string) ([]*stake.Epoch, error) {
 	switch from {
 	case "watcher":
 		return backend.app.GetWatcherEpochList(), nil

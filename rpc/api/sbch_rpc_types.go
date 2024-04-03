@@ -6,10 +6,10 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
 
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	sbchapi "github.com/zeniqsmart/zeniq-smart-chain/api"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 // StakingEpoch
@@ -31,14 +31,14 @@ type PosVote struct {
 	CoinDays     float64      `json:"coinDays"`
 }
 
-func castStakingEpochs(epochs []*stakingtypes.Epoch) []*StakingEpoch {
+func castStakingEpochs(epochs []*stake.Epoch) []*StakingEpoch {
 	rpcEpochs := make([]*StakingEpoch, len(epochs))
 	for i, epoch := range epochs {
 		rpcEpochs[i] = castStakingEpoch(epoch)
 	}
 	return rpcEpochs
 }
-func castStakingEpoch(epoch *stakingtypes.Epoch) *StakingEpoch {
+func castStakingEpoch(epoch *stake.Epoch) *StakingEpoch {
 	return &StakingEpoch{
 		Number:      hexutil.Uint64(epoch.Number),
 		StartHeight: hexutil.Uint64(epoch.StartHeight),
@@ -46,7 +46,7 @@ func castStakingEpoch(epoch *stakingtypes.Epoch) *StakingEpoch {
 		Nominations: castNominations(epoch.Nominations),
 	}
 }
-func castNominations(nominations []*stakingtypes.Nomination) []*Nomination {
+func castNominations(nominations []*stake.Nomination) []*Nomination {
 	rpcNominations := make([]*Nomination, len(nominations))
 	for i, nomination := range nominations {
 		rpcNominations[i] = &Nomination{
@@ -161,7 +161,7 @@ func toRpcCallDetail(detail *sbchapi.CallDetail) *CallDetail {
 	return callDetail
 }
 
-func castEvmLogs(evmLogs []motypes.EvmLog) []*CallLog {
+func castEvmLogs(evmLogs []types.EvmLog) []*CallLog {
 	callLogs := make([]*CallLog, len(evmLogs))
 	for i, evmLog := range evmLogs {
 		callLogs[i] = &CallLog{
@@ -176,7 +176,7 @@ func castEvmLogs(evmLogs []motypes.EvmLog) []*CallLog {
 	return callLogs
 }
 
-func castRWLists(rwLists *motypes.ReadWriteLists) *RWLists {
+func castRWLists(rwLists *types.ReadWriteLists) *RWLists {
 	if rwLists == nil {
 		return &RWLists{}
 	}
@@ -192,7 +192,7 @@ func castRWLists(rwLists *motypes.ReadWriteLists) *RWLists {
 		BlockHashList:        castBlockHashOps(rwLists.BlockHashList),
 	}
 }
-func castCreationCounterOps(ops []motypes.CreationCounterRWOp) []CreationCounterRWOp {
+func castCreationCounterOps(ops []types.CreationCounterRWOp) []CreationCounterRWOp {
 	rpcOps := make([]CreationCounterRWOp, len(ops))
 	for i, op := range ops {
 		rpcOps[i] = CreationCounterRWOp{
@@ -202,12 +202,12 @@ func castCreationCounterOps(ops []motypes.CreationCounterRWOp) []CreationCounter
 	}
 	return rpcOps
 }
-func castAccountOps(ops []motypes.AccountRWOp) []AccountRWOp {
+func castAccountOps(ops []types.AccountRWOp) []AccountRWOp {
 	rpcOps := make([]AccountRWOp, len(ops))
 	for i, op := range ops {
 		rpcOp := AccountRWOp{Addr: op.Addr}
 		if len(op.Account) > 0 {
-			accInfo := motypes.NewAccountInfo(op.Account)
+			accInfo := types.NewAccountInfo(op.Account)
 			rpcOp.Nonce = hexutil.Uint64(accInfo.Nonce())
 			rpcOp.Balance = accInfo.Balance()
 		}
@@ -215,7 +215,7 @@ func castAccountOps(ops []motypes.AccountRWOp) []AccountRWOp {
 	}
 	return rpcOps
 }
-func castBytecodeOps(ops []motypes.BytecodeRWOp) []BytecodeRWOp {
+func castBytecodeOps(ops []types.BytecodeRWOp) []BytecodeRWOp {
 	rpcOps := make([]BytecodeRWOp, len(ops))
 	for i, op := range ops {
 		rpcOps[i] = BytecodeRWOp{
@@ -225,7 +225,7 @@ func castBytecodeOps(ops []motypes.BytecodeRWOp) []BytecodeRWOp {
 	}
 	return rpcOps
 }
-func castStorageOps(ops []motypes.StorageRWOp) []StorageRWOp {
+func castStorageOps(ops []types.StorageRWOp) []StorageRWOp {
 	rpcOps := make([]StorageRWOp, len(ops))
 	for i, op := range ops {
 		rpcOps[i] = StorageRWOp{
@@ -236,7 +236,7 @@ func castStorageOps(ops []motypes.StorageRWOp) []StorageRWOp {
 	}
 	return rpcOps
 }
-func castBlockHashOps(ops []motypes.BlockHashOp) []BlockHashOp {
+func castBlockHashOps(ops []types.BlockHashOp) []BlockHashOp {
 	rpcOps := make([]BlockHashOp, len(ops))
 	for i, op := range ops {
 		rpcOps[i] = BlockHashOp{
@@ -247,7 +247,7 @@ func castBlockHashOps(ops []motypes.BlockHashOp) []BlockHashOp {
 	return rpcOps
 }
 
-func TxToRpcCallDetail(tx *motypes.Transaction) *CallDetail {
+func TxToRpcCallDetail(tx *types.Transaction) *CallDetail {
 	return &CallDetail{
 		Status:                 int(tx.Status),
 		GasUsed:                hexutil.Uint64(tx.GasUsed),
@@ -258,12 +258,12 @@ func TxToRpcCallDetail(tx *motypes.Transaction) *CallDetail {
 		RwLists:                castRWLists(tx.RwLists),
 	}
 }
-func castMoLogs(moLogs []motypes.Log) []*CallLog {
+func castMoLogs(moLogs []types.Log) []*CallLog {
 	callLogs := make([]*CallLog, len(moLogs))
 	for i, moLog := range moLogs {
 		callLogs[i] = &CallLog{
 			Address: moLog.Address,
-			Topics:  motypes.ToGethHashes(moLog.Topics),
+			Topics:  types.ToGethHashes(moLog.Topics),
 			Data:    moLog.Data,
 		}
 	}

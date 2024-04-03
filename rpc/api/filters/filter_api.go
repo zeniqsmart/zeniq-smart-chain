@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tendermint/tendermint/libs/log"
 
-	motypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	mapi "github.com/zeniqsmart/zeniq-smart-chain/api"
 )
 
@@ -145,7 +145,7 @@ func (api *filterAPI) NewFilter(crit gethfilters.FilterCriteria) (filterID rpc.I
 func (api *filterAPI) NewBlockFilter() rpc.ID {
 	api.logger.Debug("eth_newBlockFilter")
 	var (
-		headers   = make(chan *motypes.Header)
+		headers   = make(chan *types.Header)
 		headerSub = api.events.SubscribeNewHeads(headers)
 	)
 
@@ -291,7 +291,7 @@ func (api *filterAPI) GetLogs(crit gethfilters.FilterCriteria) ([]*gethtypes.Log
 	}
 	//fmt.Printf("Why? begin %d end %d logs %#v\n", begin, end, logs)
 
-	return motypes.ToGethLogs(logs), nil
+	return types.ToGethLogs(logs), nil
 }
 
 // NewHeads send a notification each time a new (header) block is appended to the chain.
@@ -304,7 +304,7 @@ func (api *filterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		headers := make(chan *motypes.Header)
+		headers := make(chan *types.Header)
 		headersSub := api.events.SubscribeNewHeads(headers)
 
 		for {

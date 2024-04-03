@@ -15,8 +15,8 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
-	mevmtypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
+	cc "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 )
 
@@ -66,12 +66,12 @@ func NewCcContractExecutor(logger log.Logger) *CcContractExecutor {
 	}
 }
 
-var _ mevmtypes.SystemContractExecutor = &CcContractExecutor{}
+var _ types.SystemContractExecutor = &CcContractExecutor{}
 
-func (_ *CcContractExecutor) Init(ctx *mevmtypes.Context) {
+func (_ *CcContractExecutor) Init(ctx *types.Context) {
 	ccAcc := ctx.GetAccount(CCContractAddress)
 	if ccAcc == nil { // only executed at genesis
-		ccAcc = mevmtypes.ZeroAccountInfo()
+		ccAcc = types.ZeroAccountInfo()
 		ccAcc.UpdateSequence(ccContractSequence)
 		ctx.SetAccount(CCContractAddress, ccAcc)
 	}
@@ -81,7 +81,7 @@ func (_ *CcContractExecutor) IsSystemContract(addr common.Address) bool {
 	return bytes.Equal(addr[:], CCContractAddress[:])
 }
 
-func (s *CcContractExecutor) Execute(ctx *mevmtypes.Context, currBlock *mevmtypes.BlockInfo, tx *mevmtypes.TxToRun) (status int, logs []mevmtypes.EvmLog, gasUsed uint64, outData []byte) {
+func (s *CcContractExecutor) Execute(ctx *types.Context, currBlock *types.BlockInfo, tx *types.TxToRun) (status int, logs []types.EvmLog, gasUsed uint64, outData []byte) {
 	if len(tx.Data) < 4 {
 		status = StatusFailed
 		outData = []byte(InvalidCallData.Error())
@@ -111,7 +111,7 @@ func (_ *CcContractExecutor) Run(_ []byte) ([]byte, error) {
 }
 
 // function transferBCHToMainnet(bytes utxo) external;
-func transferBchToMainnet(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status int, logs []mevmtypes.EvmLog, gasUsed uint64, outData []byte) {
+func transferBchToMainnet(ctx *types.Context, tx *types.TxToRun) (status int, logs []types.EvmLog, gasUsed uint64, outData []byte) {
 	status = StatusFailed //default status is failed
 	gasUsed = GasOfCCOp
 	callData := tx.Data[4:]
@@ -137,8 +137,8 @@ func transferBchToMainnet(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status
 	return
 }
 
-func buildTransferToMainnetEvmLog(utxo [36]byte, from common.Address, value *uint256.Int) mevmtypes.EvmLog {
-	evmLog := mevmtypes.EvmLog{
+func buildTransferToMainnetEvmLog(utxo [36]byte, from common.Address, value *uint256.Int) types.EvmLog {
+	evmLog := types.EvmLog{
 		Address: CCContractAddress,
 		Topics:  make([]common.Hash, 0, 4),
 	}
@@ -160,7 +160,7 @@ func buildTransferToMainnetEvmLog(utxo [36]byte, from common.Address, value *uin
 }
 
 // function burnBCH(utxo bytes, amount uint256) external
-func burnBch(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status int, logs []mevmtypes.EvmLog, gasUsed uint64, outData []byte) {
+func burnBch(ctx *types.Context, tx *types.TxToRun) (status int, logs []types.EvmLog, gasUsed uint64, outData []byte) {
 	status = StatusFailed
 	gasUsed = GasOfCCOp
 	callData := tx.Data[4:]
@@ -183,8 +183,8 @@ func burnBch(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status int, logs []
 	return
 }
 
-func buildBurnEvmLog(utxo [36]byte, value *uint256.Int) mevmtypes.EvmLog {
-	evmLog := mevmtypes.EvmLog{
+func buildBurnEvmLog(utxo [36]byte, value *uint256.Int) types.EvmLog {
+	evmLog := types.EvmLog{
 		Address: CCContractAddress,
 		Topics:  make([]common.Hash, 0, 4),
 	}
@@ -202,7 +202,7 @@ func buildBurnEvmLog(utxo [36]byte, value *uint256.Int) mevmtypes.EvmLog {
 	return evmLog
 }
 
-func consumeUTXO(ctx *mevmtypes.Context, utxo [36]byte, value *uint256.Int) error {
+func consumeUTXO(ctx *types.Context, utxo [36]byte, value *uint256.Int) error {
 	originAmount := LoadUTXO(ctx, utxo)
 	if originAmount.Cmp(value) != 0 {
 		return BchAmountNotMatch
@@ -211,33 +211,33 @@ func consumeUTXO(ctx *mevmtypes.Context, utxo [36]byte, value *uint256.Int) erro
 	return nil
 }
 
-func LoadUTXO(ctx *mevmtypes.Context, utxo [36]byte) *uint256.Int {
+func LoadUTXO(ctx *types.Context, utxo [36]byte) *uint256.Int {
 	var bz []byte
 	key := sha256.Sum256(utxo[:])
 	bz = ctx.GetStorageAt(ccContractSequence, string(key[:]))
 	return uint256.NewInt(0).SetBytes(bz)
 }
 
-func SaveUTXO(ctx *mevmtypes.Context, utxo [36]byte, amount *uint256.Int) {
+func SaveUTXO(ctx *types.Context, utxo [36]byte, amount *uint256.Int) {
 	key := sha256.Sum256(utxo[:])
 	ctx.SetStorageAt(ccContractSequence, string(key[:]), amount.Bytes())
 }
 
-func deleteUTXO(ctx *mevmtypes.Context, utxo [36]byte) {
+func deleteUTXO(ctx *types.Context, utxo [36]byte) {
 	key := sha256.Sum256(utxo[:])
 	ctx.DeleteStorageAt(ccContractSequence, string(key[:]))
 }
 
-func LoadBchMainnetBurnt(ctx *mevmtypes.Context) *uint256.Int {
+func LoadBchMainnetBurnt(ctx *types.Context) *uint256.Int {
 	var bz = ctx.GetStorageAt(ccContractSequence, SlotBCHAlreadyBurnt)
 	return uint256.NewInt(0).SetBytes(bz)
 }
 
-func SaveBchMainnetBurnt(ctx *mevmtypes.Context, amount *uint256.Int) {
+func SaveBchMainnetBurnt(ctx *types.Context, amount *uint256.Int) {
 	ctx.SetStorageAt(ccContractSequence, SlotBCHAlreadyBurnt, amount.Bytes())
 }
 
-func UpdateBchBurnt(ctx *mevmtypes.Context, amount *uint256.Int) error {
+func UpdateBchBurnt(ctx *types.Context, amount *uint256.Int) error {
 	mainnetBurnt := LoadBchMainnetBurnt(ctx)
 	burnt := ebp.GetBlackHoleBalance(ctx)
 	if burnt.Cmp(mainnetBurnt.Add(mainnetBurnt, amount)) < 0 {
@@ -247,7 +247,7 @@ func UpdateBchBurnt(ctx *mevmtypes.Context, amount *uint256.Int) error {
 	return nil
 }
 
-func transferBchFromTx(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status int, outData []byte) {
+func transferBchFromTx(ctx *types.Context, tx *types.TxToRun) (status int, outData []byte) {
 	status = StatusFailed
 	err := transferBch(ctx, tx.From, CCContractAddress, uint256.NewInt(0).SetBytes(tx.Value[:]))
 	if err != nil {
@@ -258,7 +258,7 @@ func transferBchFromTx(ctx *mevmtypes.Context, tx *mevmtypes.TxToRun) (status in
 	return
 }
 
-func transferBch(ctx *mevmtypes.Context, sender, receiver common.Address, value *uint256.Int) error {
+func transferBch(ctx *types.Context, sender, receiver common.Address, value *uint256.Int) error {
 	senderAcc := ctx.GetAccount(sender)
 	balance := senderAcc.Balance()
 	if balance.Lt(value) {
@@ -271,7 +271,7 @@ func transferBch(ctx *mevmtypes.Context, sender, receiver common.Address, value 
 
 		receiverAcc := ctx.GetAccount(receiver)
 		if receiverAcc == nil {
-			receiverAcc = mevmtypes.ZeroAccountInfo()
+			receiverAcc = types.ZeroAccountInfo()
 		}
 		receiverAccBalance := receiverAcc.Balance()
 		receiverAccBalance.Add(receiverAccBalance, value)
@@ -281,7 +281,7 @@ func transferBch(ctx *mevmtypes.Context, sender, receiver common.Address, value 
 	return nil
 }
 
-func SwitchCCEpoch(ctx *mevmtypes.Context, epoch *types.CCEpoch) {
+func SwitchCCEpoch(ctx *types.Context, epoch *cc.CCEpoch) {
 	ccInfo := LoadCCInfo(ctx)
 	//when open epoch speedup, staking epoch is in strict accordance with the mainnet height,
 	//but cc epoch which already switched in recent staking epoch can be fetch repeat,
@@ -311,10 +311,10 @@ func SwitchCCEpoch(ctx *mevmtypes.Context, epoch *types.CCEpoch) {
 	SaveCCEpoch(ctx, epoch.Number, epoch)
 }
 
-func LoadCCInfo(ctx *mevmtypes.Context) (info types.CCInfo) {
+func LoadCCInfo(ctx *types.Context) (info cc.CCInfo) {
 	bz := ctx.GetStorageAt(ccContractSequence, SlotCCInfo)
 	if bz == nil {
-		return types.CCInfo{}
+		return cc.CCInfo{}
 	}
 	_, err := info.UnmarshalMsg(bz)
 	if err != nil {
@@ -323,7 +323,7 @@ func LoadCCInfo(ctx *mevmtypes.Context) (info types.CCInfo) {
 	return
 }
 
-func SaveCCInfo(ctx *mevmtypes.Context, info types.CCInfo) {
+func SaveCCInfo(ctx *types.Context, info cc.CCInfo) {
 	bz, err := info.MarshalMsg(nil)
 	if err != nil {
 		panic(err)
@@ -339,7 +339,7 @@ func getSlotForCCEpoch(epochNum int64) string {
 	return string(buf[:])
 }
 
-func SaveCCEpoch(ctx *mevmtypes.Context, epochNum int64, epoch *types.CCEpoch) {
+func SaveCCEpoch(ctx *types.Context, epochNum int64, epoch *cc.CCEpoch) {
 	bz, err := epoch.MarshalMsg(nil)
 	if err != nil {
 		panic(err)
@@ -347,7 +347,7 @@ func SaveCCEpoch(ctx *mevmtypes.Context, epochNum int64, epoch *types.CCEpoch) {
 	ctx.SetStorageAt(ccContractSequence, getSlotForCCEpoch(epochNum), bz)
 }
 
-func LoadCCEpoch(ctx *mevmtypes.Context, epochNum int64) (epoch types.CCEpoch, ok bool) {
+func LoadCCEpoch(ctx *types.Context, epochNum int64) (epoch cc.CCEpoch, ok bool) {
 	bz := ctx.GetStorageAt(ccContractSequence, getSlotForCCEpoch(epochNum))
 	if bz == nil {
 		return

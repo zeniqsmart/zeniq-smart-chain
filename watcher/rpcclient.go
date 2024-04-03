@@ -15,8 +15,8 @@ import (
 
 	ccrpc "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	crosschain "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
+	staking "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	watcher "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
 const (
@@ -40,7 +40,7 @@ type RpcClientImp struct {
 	logger      log.Logger
 }
 
-var _ types.RpcClient = (*RpcClientImp)(nil)
+var _ watcher.RpcClient = (*RpcClientImp)(nil)
 
 func NewRpcClient(url, user, password, contentType string, logger log.Logger) *RpcClientImp {
 	if url == "" {
@@ -101,10 +101,10 @@ func (client *RpcClientImp) FetchCC(first, last int64) *ccrpc.CCrpcEpoch {
 	return cc
 }
 
-func (client *RpcClientImp) GetBlockByHeight(height int64, retry bool) *types.BCHBlock {
+func (client *RpcClientImp) GetBlockByHeight(height int64, retry bool) *watcher.BCHBlock {
 	var hash string
 	var err error
-	var blk *types.BCHBlock
+	var blk *watcher.BCHBlock
 	for hash == "" {
 		hash, err = client.getBlockHashOfHeight(height)
 		if err != nil {
@@ -132,8 +132,8 @@ func (client *RpcClientImp) GetBlockByHeight(height int64, retry bool) *types.BC
 	return blk
 }
 
-func (client *RpcClientImp) GetEpochs(start, end uint64) []*stakingtypes.Epoch {
-	var epochs []*stakingtypes.Epoch
+func (client *RpcClientImp) GetEpochs(start, end uint64) []*staking.Epoch {
+	var epochs []*staking.Epoch
 	if client == nil {
 		return epochs
 	}
@@ -165,14 +165,14 @@ func (client *RpcClientImp) sendRequest(reqStr string) ([]byte, error) {
 	return respData, nil
 }
 
-func (client *RpcClientImp) getBCHBlock(hash string) (*types.BCHBlock, error) {
-	var bi *types.BlockInfo
+func (client *RpcClientImp) getBCHBlock(hash string) (*watcher.BCHBlock, error) {
+	var bi *watcher.BlockInfo
 	var err error
 	bi, err = client.getBlock(hash)
 	if err != nil {
 		return nil, err
 	}
-	bchBlock := &types.BCHBlock{
+	bchBlock := &watcher.BCHBlock{
 		Height:    bi.Height,
 		Timestamp: bi.Time,
 	}
@@ -197,10 +197,10 @@ func (client *RpcClientImp) getBCHBlock(hash string) (*types.BCHBlock, error) {
 	return bchBlock, nil
 }
 
-func getNomination(coinbase types.TxInfo) *stakingtypes.Nomination {
+func getNomination(coinbase watcher.TxInfo) *staking.Nomination {
 	pubKey, ok := coinbase.GetValidatorPubKey()
 	if ok {
-		return &stakingtypes.Nomination{
+		return &staking.Nomination{
 			Pubkey:         pubKey,
 			NominatedCount: 1,
 		}
@@ -208,7 +208,7 @@ func getNomination(coinbase types.TxInfo) *stakingtypes.Nomination {
 	return nil
 }
 
-//func (client *RpcClientImp) getCCTransferInfos(bi *types.BlockInfo) []*crosschain.CCTransferInfo {
+//func (client *RpcClientImp) getCCTransferInfos(bi *watcher.BlockInfo) []*crosschain.CCTransferInfo {
 //	var ccInfos []*crosschain.CCTransferInfo
 //	for _, info := range bi.Tx {
 //		ccInfos = append(ccInfos, info.GetCCTransferInfos()...)
@@ -224,7 +224,7 @@ func (client *RpcClientImp) getCurrHeight() int64 {
 	if client.err != nil {
 		return -1
 	}
-	var blockCountResp types.BlockCountResp
+	var blockCountResp watcher.BlockCountResp
 	client.err = json.Unmarshal(respData, &blockCountResp)
 	if client.err != nil {
 		return -1
@@ -244,7 +244,7 @@ func (client *RpcClientImp) netSmartHeight() int64 {
 	if client.err != nil {
 		return -1
 	}
-	var blockNumberResp types.BlockNumber
+	var blockNumberResp watcher.BlockNumber
 	client.err = json.Unmarshal(respData, &blockNumberResp)
 	if client.err != nil {
 		return -1
@@ -265,7 +265,7 @@ func (client *RpcClientImp) getBlockHashOfHeight(height int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var blockHashResp types.BlockHashResp
+	var blockHashResp watcher.BlockHashResp
 	err = json.Unmarshal(respData, &blockHashResp)
 	if err != nil {
 		return "", err
@@ -278,12 +278,12 @@ func (client *RpcClientImp) getBlockHashOfHeight(height int64) (string, error) {
 	return blockHashResp.Result, nil
 }
 
-func (client *RpcClientImp) getBlock(hash string) (*types.BlockInfo, error) {
+func (client *RpcClientImp) getBlock(hash string) (*watcher.BlockInfo, error) {
 	respData, err := client.sendRequest(fmt.Sprintf(ReqStrBlock, hash))
 	if err != nil {
 		return nil, err
 	}
-	var blockInfoResp types.BlockInfoResp
+	var blockInfoResp watcher.BlockInfoResp
 	err = json.Unmarshal(respData, &blockInfoResp)
 	if err != nil {
 		return nil, err
@@ -358,12 +358,12 @@ func DO_getCC(first, last int64, respData []byte) (*ccrpc.CCrpcEpoch, error) {
 	return &ccepoch, nil
 }
 
-func (client *RpcClientImp) getTx(hash string, blockhash string) (*types.TxInfo, error) {
+func (client *RpcClientImp) getTx(hash string, blockhash string) (*watcher.TxInfo, error) {
 	respData, err := client.sendRequest(fmt.Sprintf(ReqStrTx, hash, blockhash))
 	if err != nil {
 		return nil, err
 	}
-	var txInfoResp types.TxInfoResp
+	var txInfoResp watcher.TxInfoResp
 	err = json.Unmarshal(respData, &txInfoResp)
 	if err != nil {
 		return nil, err
@@ -390,7 +390,7 @@ type zeniqsmartJsonrpcMessage struct {
 	Result  json.RawMessage         `json:"result,omitempty"`
 }
 
-func (client *RpcClientImp) getEpochs(start, end uint64) []*stakingtypes.Epoch {
+func (client *RpcClientImp) getEpochs(start, end uint64) []*staking.Epoch {
 	var respData []byte
 	respData, client.err = client.sendRequest(fmt.Sprintf(ReqStrEpochs, hexutil.Uint64(start).String(), hexutil.Uint64(end).String()))
 	if client.err != nil {
@@ -401,7 +401,7 @@ func (client *RpcClientImp) getEpochs(start, end uint64) []*stakingtypes.Epoch {
 	if client.err != nil {
 		return nil
 	}
-	var epochsResp []*stakingtypes.Epoch
+	var epochsResp []*staking.Epoch
 	client.err = json.Unmarshal(m.Result, &epochsResp)
 	if client.err != nil {
 		return nil
@@ -432,9 +432,9 @@ func (client *RpcClientImp) GetCCEpochs(start, end uint64) []*crosschain.CCEpoch
 func (client *RpcClientImp) GetBlockHash(height int64) (string, error) {
 	return client.getBlockHashOfHeight(height)
 }
-func (client *RpcClientImp) GetBlockInfo(hash string) (*types.BlockInfo, error) {
+func (client *RpcClientImp) GetBlockInfo(hash string) (*watcher.BlockInfo, error) {
 	return client.getBlock(hash)
 }
-func (client *RpcClientImp) GetTxInfo(hash string, blockhash string) (*types.TxInfo, error) {
+func (client *RpcClientImp) GetTxInfo(hash string, blockhash string) (*watcher.TxInfo, error) {
 	return client.getTx(hash, blockhash)
 }

@@ -92,17 +92,14 @@ require (
 )
 
 require (
-	github.com/gcash/bchd v0.17.2-0.20201218180520-5708823e0e99
-	github.com/gcash/bchutil v0.0.0-20210113190856-6ea28dff4000
-	github.com/zeniqsmart/ads-zeniq-smart-chain v0.6.0
-	github.com/zeniqsmart/db-zeniq-smart-chain v0.6.0
-	github.com/zeniqsmart/evm-zeniq-smart-chain v0.6.0
+	github.com/zeniqsmart/ads-zeniq-smart-chain v0.6.2
+	github.com/zeniqsmart/db-zeniq-smart-chain v0.6.2
+	github.com/zeniqsmart/evm-zeniq-smart-chain v0.6.2
 )
 
 require (
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
-	github.com/dchest/siphash v1.2.2 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect

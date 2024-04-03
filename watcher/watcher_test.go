@@ -12,7 +12,7 @@ import (
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
@@ -38,9 +38,9 @@ func buildMockBCHNodeWithOnlyValidator1() *MockBCHNode {
 			Timestamp:   int64(i * 10 * 60),
 			HashId:      [32]byte{byte(i + 1)},
 			ParentBlk:   [32]byte{byte(i)},
-			Nominations: make([]stakingtypes.Nomination, 1),
+			Nominations: make([]stake.Nomination, 1),
 		}
-		m.blocks[i].Nominations[0] = stakingtypes.Nomination{
+		m.blocks[i].Nominations[0] = stake.Nomination{
 			Pubkey:         testValidatorPubkey1,
 			NominatedCount: 1,
 		}
@@ -56,7 +56,7 @@ func buildMockBCHNodeWithReorg() *MockBCHNode {
 		Timestamp:   99 * 10 * 60,
 		HashId:      [32]byte{byte(100)},
 		ParentBlk:   [32]byte{byte(199)},
-		Nominations: make([]stakingtypes.Nomination, 1),
+		Nominations: make([]stake.Nomination, 1),
 	}
 	m.reorgBlocks = make(map[[32]byte]*types.BCHBlock)
 	m.reorgBlocks[[32]byte{byte(199)}] = &types.BCHBlock{
@@ -64,7 +64,7 @@ func buildMockBCHNodeWithReorg() *MockBCHNode {
 		Timestamp:   98 * 10 * 60,
 		HashId:      [32]byte{byte(199)},
 		ParentBlk:   [32]byte{byte(98)},
-		Nominations: make([]stakingtypes.Nomination, 1),
+		Nominations: make([]stake.Nomination, 1),
 	}
 	return m
 }
@@ -98,7 +98,7 @@ func (m MockRpcClient) GetBlockByHash(hash [32]byte) *types.BCHBlock {
 	}
 	return m.node.blocks[height-1]
 }
-func (m MockRpcClient) GetEpochs(start, end uint64) []*stakingtypes.Epoch {
+func (m MockRpcClient) GetEpochs(start, end uint64) []*stake.Epoch {
 	fmt.Printf("mock Rpc not support get Epoch")
 	return nil
 }
@@ -114,7 +114,7 @@ var defaults = param.DefaultConfig()
 
 type MockEpochConsumer struct {
 	w         *Watcher
-	epochList []*stakingtypes.Epoch
+	epochList []*stake.Epoch
 }
 
 // nolint
@@ -181,11 +181,11 @@ func TestRunWithFork(t *testing.T) {
 }
 
 func TestEpochSort(t *testing.T) {
-	epoch := &stakingtypes.Epoch{
-		Nominations: make([]*stakingtypes.Nomination, 100),
+	epoch := &stake.Epoch{
+		Nominations: make([]*stake.Nomination, 100),
 	}
 	for i := 0; i < 100; i++ {
-		epoch.Nominations[i] = &stakingtypes.Nomination{
+		epoch.Nominations[i] = &stake.Nomination{
 			Pubkey:         [32]byte{byte(i)},
 			NominatedCount: int64(i/5 + 1),
 		}

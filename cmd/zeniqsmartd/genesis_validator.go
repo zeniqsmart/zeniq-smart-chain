@@ -22,7 +22,7 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/app"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/bigutils"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/ethutils"
-	stakingtypes "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 const (
@@ -99,7 +99,7 @@ zeniqsmartd generate-genesis-validator
 				return errors.New("staking coin parse failed")
 			}
 			// generate new genesis validator
-			genVal := stakingtypes.Validator{
+			genVal := stake.Validator{
 				Address:      addr,
 				RewardTo:     addr,
 				VotingPower:  viper.GetInt64(flagVotingPower),
@@ -135,7 +135,7 @@ func AddGenesisValidatorCmd(ctx *Context) *cobra.Command {
 			// get new validator info
 			s := strings.TrimSpace(args[0])
 			// check
-			v := stakingtypes.Validator{}
+			v := stake.Validator{}
 			info, err := hex.DecodeString(s)
 			if err != nil {
 				return err
