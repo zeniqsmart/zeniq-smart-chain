@@ -63,7 +63,7 @@ type AppConfig struct {
 
 	BlocksBehind   int64      `mapstructure:"blocks-behind"`
 	UpdateOfADSLog bool       `mapstructure:"update-of-ads-log"`
-	CCRPCEpochs    [][2]int64 `mapstructure:"cc-rpc-epochs"`
+	CCRPCEpochs    [][3]int64 `mapstructure:"cc-rpc-epochs"`
 	CCRPCForkBlock int64      `mapstructure:"cc-rpc-fork-block"` // MaxInt64 to disable CCRPC
 	HeightRevision [][2]int64 `mapstructure:"height-revision"`
 }
@@ -108,7 +108,7 @@ func DefaultAppConfigWithHome(home string) *AppConfig {
 		WithSyncDB:              false,
 		BlocksBehind:            0,
 		UpdateOfADSLog:          false,
-		CCRPCEpochs:             [][2]int64{{184464, 6}},
+		CCRPCEpochs:             [][3]int64{{184464, 6, 2400}},     // 2400=6*2*10*60//3
 		CCRPCForkBlock:          math.MaxInt64 - 1000,              // -1000 to allow tests set StartHeight beyond
 		HeightRevision:          [][2]int64{{0, 7}, {14444444, 7}}, // 7=EVMC_ISTANBUL  is default from 0, 11=EVMC_SHANGHAI, next block > 14444444
 	}

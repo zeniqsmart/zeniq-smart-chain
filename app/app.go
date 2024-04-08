@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -17,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	gethcmn "github.com/ethereum/go-ethereum/common"
 	gethcore "github.com/ethereum/go-ethereum/core"
@@ -28,6 +29,7 @@ import (
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	cryptoenc "github.com/tendermint/tendermint/crypto/encoding"
+
 	// tmstate "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/libs/log"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -206,7 +208,7 @@ func validHeightRevision(e [][2]int64) {
 	}
 }
 
-func validCCRPCEpochs(e [][2]int64) {
+func validCCRPCEpochs(e [][3]int64) {
 	if e == nil || len(e) == 0 {
 		panic("cc-rpc-epochs not set\n")
 	}
@@ -218,11 +220,11 @@ func validCCRPCEpochs(e [][2]int64) {
 		if ee[0] == 0 || ee[1] == 0 {
 			panic("Zero in cc-rpc-epochs entry\n")
 		}
-		if ee[0] < param.CCRPCMAINNET {
-			panic(fmt.Sprintf("cc-rpc-epochs block cannot be smaller than %v\n", param.CCRPCMAINNET))
+		if ee[1] < 6 || ee[1] > 2500 {
+			panic(fmt.Sprintf("cc-rpc-epochs epoch count cannot be smaller than 6 and larger than 2500\n"))
 		}
-		if ee[1] < ccrpc.MIN_CCRPCEpochs || ee[1] > 2500 {
-			panic(fmt.Sprintf("cc-rpc-epochs epoch count cannot be smaller than %v and larger than 2500\n", ccrpc.MIN_CCRPCEpochs))
+		if ee[2] < ee[1]*2*10*60/3 || ee[2]%2 != 0 {
+			panic(fmt.Errorf("ccrpc: error: (%d,%d) second smart not even and >= 2*10*60/3 times first main", ee[1], ee[2]))
 		}
 		lastee0 = ee[0]
 	}
@@ -711,10 +713,9 @@ func (app *App) Commit() abcitypes.ResponseCommit {
 	if app.currHeight < CCRPCForkBlock {
 		app.updateValidatorsAndStakingInfo(ctx)
 	} else {
-		if doneApply := app.CCRPC.CCRPCProcessed(ctx, app.GetLatestBlockNum(), nil); doneApply > 0 {
+		if app.CCRPC.CCRPCProcessed(ctx, app.GetLatestBlockNum(), app.block.Timestamp, nil) {
 			app.logger.Debug(fmt.Sprintf(
-				"ccrpc: crosschain up to smart height %d applied at %d with time %d",
-				doneApply,
+				"ccrpc: crosschain epochs applied at %d with time %d",
 				app.block.Number,
 				app.block.Timestamp,
 			))

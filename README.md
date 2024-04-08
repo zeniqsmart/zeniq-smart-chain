@@ -91,8 +91,8 @@ For subsequent nodes copy and override above 3 files in, then edit.
   mainnet-rpc-password = "zeniq123"
   watcher-speedup = true
   zeniqsmart-rpc-url = "https://smart3.zeniq.network:9545"
-  # consensus-relevant: [[mainnetHeight>=184464,mainnetBlocks>=6],...]
-  cc-rpc-epochs = [ [184464, 6], [185184, 144], [185472, 1008] ]
+  # consensus-relevant: [[mainnetHeight>=184464,e>=6,>=2*e*10*60/3],...]
+  cc-rpc-epochs = [ [184464, 6, 2400], [185184, 144, 57600], [185472, 1008, 403200] ]
   cc-rpc-fork-block = 11000011
   ```
 

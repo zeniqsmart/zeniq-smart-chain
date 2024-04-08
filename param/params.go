@@ -44,9 +44,4 @@ const (
 	XHedgeForkBlock        int64  = 4106000
 	ShaGateForkBlock       int64  = 80000000
 	ShaGateSwitch          bool   = false
-
-	CCRPCForkBlock int64 = 11000011
-	// must be earlier than CCRPCForkBlock - CCRPCEpochs[.][0]
-	CCRPCMAINNET int64 = 1008 * 183 // 184464, (184464 + 1008)/2016 == 92
-	// CCRPCMAINNET = CCRPCEpochs[0][0]
 )

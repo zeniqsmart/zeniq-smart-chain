@@ -1,0 +1,38 @@
+variables:
+  REGISTRY: registry.vougee.space/zeniq
+
+build:
+  stage: build
+  image: docker:dind
+  services:
+    - docker:dind
+  before_script:
+    - mkdir -p $HOME/.docker
+    - echo $ZENIQ_REGISTRY > $HOME/.docker/config.json
+    - apk update
+    - apk add git
+    - git clone -b main https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.vougee.gmbh/zeniq/smartchain/moeingads.git
+    - git clone -b main https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.vougee.gmbh/zeniq/smartchain/moeingdb.git
+    - git clone -b main https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.vougee.gmbh/zeniq/smartchain/moeingevm.git
+    - mv moeingads ../ads-zeniq-smart-chain
+    - mv moeingdb ../db-zeniq-smart-chain
+    - mv moeingevm ../evm-zeniq-smart-chain
+  script:
+    - sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" go.mod
+    - sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../db-zeniq-smart-chain/go.mod
+    - sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../evm-zeniq-smart-chain/go.mod
+    - >
+      docker build
+      --label "org.opencontainers.image.title=$CI_PROJECT_TITLE"
+      --label "org.opencontainers.image.url=$CI_PROJECT_URL"
+      --label "org.opencontainers.image.created=$CI_JOB_STARTED_AT"
+      --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      --label "org.opencontainers.image.version=$CI_COMMIT_REF_NAME"
+      --tag $REGISTRY/$CI_PROJECT_NAME:latest
+      .
+    - docker push $REGISTRY/$CI_PROJECT_NAME:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      exists:
+        - Dockerfile
+

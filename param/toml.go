@@ -73,7 +73,7 @@ blocks-behind = {{ .BlocksBehind }}
 # no more than one entry here because if the actual one is less entries than here, default stays default
 # keep this small default value for the tests
 # cc-rpc-epochs = {{ .CCRPCEpochs }} # does not make commas
-cc-rpc-epochs = [ [184464, 6] ]
+cc-rpc-epochs = [ [184464, 6, 2400] ]
 cc-rpc-fork-block = {{ .CCRPCForkBlock }}
 
 # height-revision = {{ .HeightRevision }} # does not make commas

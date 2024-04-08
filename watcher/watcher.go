@@ -162,8 +162,8 @@ func (watcher *Watcher) fetchBlocks(catchupChan chan bool, latestFinalizedHeight
 				catchupChan <- true // for test
 				// panic(fmt.Errorf("get block:%d failed\n", latestFinalizedHeight))
 			}
-			CCRPCMAINNET := watcher.chainConfig.AppConfig.CCRPCEpochs[0][0]
-			if latestFinalizedHeight >= CCRPCMAINNET { // CCRPCMAINNET is already included in ccrpc
+			ccrpcMainStart := watcher.chainConfig.AppConfig.CCRPCEpochs[0][0]
+			if latestFinalizedHeight >= ccrpcMainStart {
 				watcher.logger.Info(fmt.Sprintf("leaving WatcherMain at %d time %v", latestFinalizedHeight, blk.Timestamp))
 				if !catchup {
 					catchup = true

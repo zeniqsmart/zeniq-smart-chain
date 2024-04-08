@@ -21,15 +21,14 @@ import (
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/watcher"
 	watchertypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
 const (
-	smartheight   = int64(param.CCRPCForkBlock)
-	mainnetheight = param.CCRPCMAINNET // 184464
+	smartheight   = 11000011
+	mainnetheight = 184464
 	mainnettime   = 1661959077
 )
 

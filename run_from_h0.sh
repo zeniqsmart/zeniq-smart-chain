@@ -58,7 +58,7 @@ BC_1="$(http --auth zeniq:zeniq123 http://172.17.0.1:57319 method=getblockcount 
 BC=$((1+BC_1))
 echo "$BC will be first mainnet block of ccrpc epoch 0"
 
-sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[$BC,1]]/g" $NODE_HOME/config/app.toml
+sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[$BC,1,400]]/g" $NODE_HOME/config/app.toml
 sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" $NODE_HOME/config/app.toml
 sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $NODE_HOME/config/app.toml
 

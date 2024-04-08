@@ -7,6 +7,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +24,6 @@ import (
 )
 
 const (
-	MIN_CCRPCEpochs = 6
 	//The final x value in CCRPCEpochs[x][1] should be 1008.
 	//Large enough to preclude a block reorg on mainnet
 	//as that would make a sync impossible later on.
@@ -35,20 +36,20 @@ var (
 	Slotccrpc           string = strings.Repeat(string([]byte{0}), 32)
 )
 
-func loadLastEEBTSmartHeight(ctx *mevmtypes.Context) int64 {
+func loadLastEEBTSmartHeight(ctx *mevmtypes.Context) (lastEEBTSmartHeight int64) {
 	var bz []byte
 	bz = ctx.GetStorageAt(ccrpcSequence, Slotccrpc)
 	if bz == nil {
 		return 0
 	}
-	return int64(binary.BigEndian.Uint64(bz))
+	lastEEBTSmartHeight = int64(binary.BigEndian.Uint64(bz))
+	return
 }
 
-func saveLastEEBTSmartHeight(ctx *mevmtypes.Context, lastEEBTSmartHeight int64) int64 {
+func saveLastEEBTSmartHeight(ctx *mevmtypes.Context, lastEEBTSmartHeight int64) {
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], uint64(lastEEBTSmartHeight))
 	ctx.SetStorageAt(ccrpcSequence, Slotccrpc, b[:])
-	return lastEEBTSmartHeight
 }
 
 type IContextGetter interface {
@@ -61,7 +62,7 @@ type CCrpcImp struct {
 	doneMainHeight int64
 	ccrpcEpochList []*ccrpctypes.CCrpcEpoch
 	ccrpcEpochChan chan *ccrpctypes.CCrpcEpoch
-	CCRPCEpochs    [][2]int64
+	CCRPCEpochs    [][3]int64
 }
 
 // Create ccrpc handler.
@@ -79,24 +80,25 @@ func Newccrpc(logger log.Logger, chainConfig *param.ChainConfig,
 		logger:         logger,
 		rpcMainnet:     rpc,
 		doneMainHeight: chainConfig.AppConfig.CCRPCEpochs[0][0] - 1,
-		ccrpcEpochList: make([]*ccrpctypes.CCrpcEpoch, 0, queue),
+		ccrpcEpochList: make([]*ccrpctypes.CCrpcEpoch, 0),
 		ccrpcEpochChan: make(chan *ccrpctypes.CCrpcEpoch, queue),
 		CCRPCEpochs:    chainConfig.AppConfig.CCRPCEpochs,
 	}
 }
 
-func (cc *CCrpcImp) getEpochMainSmart(nextFirst int64) (n int64, nn int64) {
+func (cc *CCrpcImp) getEpochMainDelaySmart(nextFirst int64) (n int64, nn int64) {
 	n = 0
+	nn = 0
 	for _, v := range cc.CCRPCEpochs {
 		if nextFirst < v[0] {
 			break
 		}
 		n = v[1]
+		nn = v[2]
 	}
 	if n == 0 {
-		panic(fmt.Errorf("ccrpc: error: epoch of 0 blocks at height %v", nextFirst))
+		panic(fmt.Errorf("ccrpc: error: NOT OK cc-rpc-epochs at height %v", nextFirst))
 	}
-	nn = n * 10 * 60 / 3
 	return
 }
 
@@ -105,23 +107,22 @@ func (cc *CCrpcImp) CCRPCMain() {
 	if !cc.rpcMainnet.IsConnected() {
 		panic(fmt.Errorf("ccrpc: error: CCRPCMain mainnet zeniqd not connected. smartzeniqd cannot run without"))
 	}
+	var mainHeight int64 = 0
 	for {
 		nextFirst := cc.doneMainHeight + 1
-		n, _ := cc.getEpochMainSmart(nextFirst)
+		n, _ := cc.getEpochMainDelaySmart(nextFirst)
 
 		nextLast := nextFirst + n - 1
-		cc.logger.Debug(fmt.Sprintf("ccrpc: CCRPCMain: next will be (%d-%d)", nextFirst, nextLast))
 
-		// to start fetching an epoch later
 		startFetching := nextLast + n
-		mainnetHeight := cc.rpcMainnet.GetMainnetHeight()
-		if mainnetHeight < startFetching { // only after some cycles we have reached the present
-			cc.logger.Debug(fmt.Sprintf(
-				"ccrpc: CCRPCMain: delaying (%d-%d), now %d, due %d",
-				nextFirst, nextLast, mainnetHeight, startFetching))
+		for mainHeight < startFetching {
+			mainHeight = cc.rpcMainnet.GetMainnetHeight()
+			if mainHeight >= startFetching {
+				break
+			}
 			cc.suspended(time.Duration(60) * time.Second)
-			continue
 		}
+
 		var ccrpcEpoch = cc.rpcMainnet.FetchCC(nextFirst, nextLast)
 		if ccrpcEpoch != nil {
 			cc.doneMainHeight = ccrpcEpoch.LastHeight
@@ -155,12 +156,18 @@ func blockAfterTime(
 	if n_entries > int(blockStart) {
 		n_entries = int(blockStart)
 	}
-	return blockStart - int64(sort.Search(n_entries, after))
+	found := blockStart - int64(sort.Search(n_entries, after))
+	if found == 0 {
+		return found
+	}
+	// round up for error correction
+	found = ((found >> 4) << 4) + 16
+	return found
 }
 
-func (cc *CCrpcImp) CCRPCProcessed(ctx *mevmtypes.Context, blockNumber int64, bat func(int64, int64) int64) (doneApply int64) {
-	doneApply = -1
+func (cc *CCrpcImp) CCRPCProcessed(ctx *mevmtypes.Context, blockNumber, timeStamp int64, bat func(int64, int64) int64) (doneApply bool) {
 	var lastEEBTSmartHeight int64 = loadLastEEBTSmartHeight(ctx) // expecting 0 the first time
+	var nextEEBTSmartHeight int64 = lastEEBTSmartHeight
 
 	var loop = true
 	for loop {
@@ -173,86 +180,90 @@ func (cc *CCrpcImp) CCRPCProcessed(ctx *mevmtypes.Context, blockNumber int64, ba
 			loop = false
 		}
 	}
+	thisLen := len(cc.ccrpcEpochList)
 
-	blOK := func(blockNumber int64) bool {
-		block, _ := ctx.GetBlockByHeight(uint64(blockNumber))
-		return block != nil
-	}
-
-	for len(cc.ccrpcEpochList) > 0 {
-		cce := cc.ccrpcEpochList[0]
-		EEBT := cce.EpochEndBlockTime
-		_, nn := cc.getEpochMainSmart(cce.FirstHeight)
-		if cce.EEBTSmartHeight == 0 { // we maybe did the mapping already
-			searchBack := 4 * nn
+	ccrpcEpochChan := make(chan *ccrpctypes.CCrpcEpoch, thisLen)
+	processOne := func(cce *ccrpctypes.CCrpcEpoch) int64 {
+		blOK := func(blockNumber int64) bool {
+			block, _ := ctx.GetBlockByHeight(uint64(blockNumber))
+			return block != nil
+		}
+		n, nn := cc.getEpochMainDelaySmart(cce.FirstHeight)
+		if cce.EEBTSmartHeight == 0 {
+			EEBT := cce.EpochEndBlockTime
 			if bat != nil { // for testing
-				cce.EEBTSmartHeight = bat(searchBack, EEBT)
+				cce.EEBTSmartHeight = bat(nn+1, EEBT)
 			} else {
 				blockNumber_1 := blockNumber - 1
 				for ; blockNumber_1 > lastEEBTSmartHeight && !blOK(blockNumber_1); blockNumber_1-- {
 				}
-				cce.EEBTSmartHeight = blockAfterTime(ctx, blockNumber_1, searchBack, EEBT, cc.logger)
+				cce.EEBTSmartHeight = blockAfterTime(ctx, blockNumber_1, nn+1, EEBT, cc.logger)
 			}
 			if cce.EEBTSmartHeight == 0 {
-				cc.logger.Debug(fmt.Sprintf("ccrpc: (%d-%d) EEBT %v not mapped to smart height",
+				cc.logger.Info(fmt.Sprintf("ccrpc: (%d-%d) EEBT %v not mapped to smart height",
 					cce.FirstHeight, cce.LastHeight, EEBT))
-				if len(cce.TransferInfos) > 0 {
-					for _, ti := range cce.TransferInfos {
-						cc.logger.Debug(fmt.Sprintf("ccrpc: (%d-%d) EEBT %v ignored TransferInfo %v",
-							cce.FirstHeight, cce.LastHeight, EEBT, ti))
-					}
-				} else {
-					cc.logger.Debug(fmt.Sprintf("ccrpc: (%d-%d) EEBT %v, ignoring as no txs",
-						cce.FirstHeight, cce.LastHeight, EEBT))
+				for _, ti := range cce.TransferInfos {
+					cc.logger.Info(fmt.Sprintf("ccrpc: (%d-%d) EEBT %v ignored TransferInfo %v",
+						cce.FirstHeight, cce.LastHeight, EEBT, ti))
 				}
-				cc.ccrpcEpochList = cc.ccrpcEpochList[1:]
-				continue
+				return 0 // ignore cce
 			}
 			if cce.EEBTSmartHeight < lastEEBTSmartHeight {
 				cc.logger.Info(fmt.Sprintf(
 					"ccrpc: (%d-%d) new end of epoch smart height %d smaller than already processed one %d",
 					cce.FirstHeight, cce.LastHeight, cce.EEBTSmartHeight, lastEEBTSmartHeight))
-				cc.ccrpcEpochList = cc.ccrpcEpochList[1:]
-				continue
+				return 0 // ignore cce
 			}
 		}
-		var smart_to_main_correction float64 = 1.0
-		if lastEEBTSmartHeight != 0 && cce.EEBTSmartHeight > lastEEBTSmartHeight {
-			smart_to_main_correction = 1.0 * float64(cce.EEBTSmartHeight-lastEEBTSmartHeight) / float64(nn)
+		var nn_new int64 = nn
+		for cce.EEBTSmartHeight+nn_new < blockNumber {
+			nn_new += 200 // 10*60/3
 		}
-		smartDelay := int64(2.0 * float64(nn) * smart_to_main_correction)
-		var thisApply = cce.EEBTSmartHeight + smartDelay
-		cc.logger.Debug(fmt.Sprintf("ccrpc: (%d-%d) to apply at %d (delay %d) with %d txs",
-			cce.FirstHeight, cce.LastHeight, thisApply, smartDelay, len(cce.TransferInfos)))
-		if thisApply <= blockNumber {
-
-			for thisApply < blockNumber && len(cce.TransferInfos) > 0 {
-				cc.logger.Debug(fmt.Sprintf(
-					"ccrpc: (%d-%d) missed apply due at %v. Adding another delay %d to the due time.",
-					cce.FirstHeight, cce.LastHeight, thisApply, smartDelay))
-				thisApply = thisApply + smartDelay
-			}
-
-			if thisApply == blockNumber {
-				cc.logger.Info(fmt.Sprintf("ccrpc: (%d-%d) mapped to smart height=%d, applying now at height=%d",
-					cce.FirstHeight, cce.LastHeight, cce.EEBTSmartHeight, blockNumber))
-			} else {
-				break
-			}
-
+		if nn_new > nn {
+			// panic else resync would fail since we came here none-deterministically
+			panic(fmt.Errorf("ccrpc: missed epoch. app.toml: add to cc-rpc-epochs [%d,%d,%d] and restart", cce.FirstHeight, n, nn_new))
+		}
+		var thisApply = cce.EEBTSmartHeight + nn
+		if thisApply == blockNumber {
+			cc.logger.Info(fmt.Sprintf("ccrpc: (%d-%d) with %d txs mapped to smart height %d, applying now at height=%d, delaying %d",
+				cce.FirstHeight, cce.LastHeight, len(cce.TransferInfos), cce.EEBTSmartHeight, blockNumber, (thisApply - cce.EEBTSmartHeight)))
 			for _, ti := range cce.TransferInfos {
-				cc.logger.Debug(fmt.Sprintf("ccrpc: applying TransferInfo %v", ti))
 				AccountCcrpc(ctx, ti)
 			}
-			doneApply = cce.EEBTSmartHeight // return value
-			lastEEBTSmartHeight = saveLastEEBTSmartHeight(ctx, cce.EEBTSmartHeight)
-			cc.ccrpcEpochList = cc.ccrpcEpochList[1:]
+			return cce.EEBTSmartHeight // cce done
+		}
+		ccrpcEpochChan <- cce
+		return 0 // cce for next time
+	}
+
+	var wg sync.WaitGroup
+	for _, cce := range cc.ccrpcEpochList {
+		if timeStamp > cce.EpochEndBlockTime {
+			wg.Add(1)
+			go func(pcce *ccrpctypes.CCrpcEpoch) {
+				if nxt := processOne(pcce); nxt > atomic.LoadInt64(&nextEEBTSmartHeight) {
+					atomic.StoreInt64(&nextEEBTSmartHeight, nxt)
+				}
+				wg.Done()
+			}(cce)
 		} else {
-			break
+			ccrpcEpochChan <- cce
+		}
+	}
+	wg.Wait()
+	cc.ccrpcEpochList = nil
+	loop = true
+	for loop {
+		select {
+		case cce := <-ccrpcEpochChan:
+			cc.ccrpcEpochList = append(cc.ccrpcEpochList, cce)
+		default:
+			loop = false
 		}
 	}
 
-	return
+	saveLastEEBTSmartHeight(ctx, nextEEBTSmartHeight) // next lastEEBTSmartHeight
+	return len(cc.ccrpcEpochList) < thisLen
 }
 
 func AccountCcrpc(ctx *mevmtypes.Context, ti *ccrpctypes.CCrpcTransferInfo) {

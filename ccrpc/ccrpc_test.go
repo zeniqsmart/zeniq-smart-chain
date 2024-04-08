@@ -20,9 +20,10 @@ package ccrpc_test
 import (
 	//"encoding/json"
 	"encoding/hex"
-	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -151,8 +152,7 @@ func TestCCRPC(t *testing.T) {
 	require.Equal(t, receiverAccBalance, amount)
 
 	for {
-		if e := _app.CCRPC.CCRPCProcessed(
-			ctx, int64(blockNumber), testBlockAfterTime); e > 0 {
+		if _app.CCRPC.CCRPCProcessed(ctx, int64(blockNumber), 1661959077, testBlockAfterTime) {
 			break
 		}
 	}
