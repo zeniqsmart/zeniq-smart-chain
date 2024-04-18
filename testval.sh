@@ -2,9 +2,13 @@
 
 : '
 
+Note different service names on testval{1,2,3}:
+zmain
+zsmart
+
 Constants:
-- cc-rpc-epochs is [[1024,6,2400]], or the environment variable CCRPCEPOCHS (z_smartnet)
-- cc-rpc-fork-block = 0, ie crosschain from the beginning of the smartnet
+- cc-rpc-epochs is [[1024,6,7200]], or the environment variable CCRPCEPOCHS (z_smartnet)
+- cc-rpc-fork-block = 0, but must be before 1024 main
 - zaddrkey,zaddr on mainnet
 - zsmartgenesiskey, zsmartgenesis on smartnet
 - zsmartaddrkey,zsmartaddr on smartnet
@@ -146,7 +150,7 @@ z_smartnet() {
    zsmartgenesiskey="0xe127f1fddebd3218eabb5b3e41ffc55db9a526555a8d99b263fb73c9c5deaf2c"
    zsmartgenesis="0x53CB74974D4CddEF438DE77B13F18Eb3FA6309E8"
    sed -i "s/0xf96ae03f3637e3195ebcb85f0043052338196e57/$zsmartgenesis/g" ~/.zeniqsmartd/config/genesis.json
-   zepochs=${CCRPCEPOCHS:-"[[1024,6,2400]]"} #needs to be the same in all nodes:
+   zepochs=${CCRPCEPOCHS:-"[[1024,6,7200]]"} #needs to be the same in all nodes:
    sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = $zepochs/g" ~/.zeniqsmartd/config/app.toml
    sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" ~/.zeniqsmartd/config/app.toml
    sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/127.0.0.1:57319\"/g" ~/.zeniqsmartd/config/app.toml

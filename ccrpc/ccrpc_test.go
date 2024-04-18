@@ -8,9 +8,8 @@ go test -run TestDATA
 go test -run TestCCRPC
 go test -gcflags '-N -l' -c
 dlv exec ccrpc.test
-b testBlockAfterTime
 b TestCCRPC
-b CCRPCProcessed
+b ProcessCCRPC
 b TestDATA
 
 */
@@ -20,7 +19,6 @@ package ccrpc_test
 import (
 	//"encoding/json"
 	"encoding/hex"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -115,18 +113,6 @@ func TestZeniqPubkeyToReceiverAddress(t *testing.T) {
 	require.Equal(t, smartZeniqAddress, wantedReceiverAddress)
 }
 
-func testBlockAfterTime(searchBack, epochEndBlockTime int64) int64 {
-	var blks = make([]int64, 3600*2)
-	for i := 0; i < 2*3600; i++ {
-		blks[i] = 1661959077 + 3*int64(i-3600)
-	}
-	blockNumber := 5999
-	after := func(fromEnd int) bool {
-		return blks[blockNumber-fromEnd] < epochEndBlockTime
-	}
-	return int64(blockNumber - int(sort.Search(int(searchBack), after)))
-}
-
 func TestCCRPC(t *testing.T) {
 	key, addr := testutils.GenKeyAndAddr()
 	blockNumber := 4799 // 3600+6*10*60/3-1
@@ -152,7 +138,7 @@ func TestCCRPC(t *testing.T) {
 	require.Equal(t, receiverAccBalance, amount)
 
 	for {
-		if _app.CCRPC.CCRPCProcessed(ctx, int64(blockNumber), 1661959077, testBlockAfterTime) {
+		if _app.CCRPC.ProcessCCRPC(ctx, int64(blockNumber), 1661959077) {
 			break
 		}
 	}

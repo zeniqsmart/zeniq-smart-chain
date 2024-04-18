@@ -221,10 +221,10 @@ func validCCRPCEpochs(e [][3]int64) {
 			panic("Zero in cc-rpc-epochs entry\n")
 		}
 		if ee[1] < 6 || ee[1] > 2500 {
-			panic(fmt.Sprintf("cc-rpc-epochs epoch count cannot be smaller than 6 and larger than 2500\n"))
+			panic(fmt.Sprintf("cc-rpc-epochs epoch count NOT smaller than 6 and NOT larger than 2500\n"))
 		}
-		if ee[2] < ee[1]*2*10*60/3 || ee[2]%2 != 0 {
-			panic(fmt.Errorf("ccrpc: error: (%d,%d) second smart not even and >= 2*10*60/3 times first main", ee[1], ee[2]))
+		if ee[2] < ee[1]*1200 || ee[2]%2 != 0 {
+			panic(fmt.Errorf("ccrpc: error: (%d,%d) second smart not even and >= 1200 times first main", ee[1], ee[2]))
 		}
 		lastee0 = ee[0]
 	}
@@ -346,7 +346,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 	catchupChan := make(chan bool, 1)
 	go app.watcher.WatcherMain(catchupChan)
 	<-catchupChan
-	app.CCRPC = ccrpc.Newccrpc(app.logger.With("module", "ccrpc"), app.config, rpccl)
+	app.CCRPC = ccrpc.Newccrpc(app.logger.With("module", "ccrpc"), app.config, rpccl, ctx)
 	go app.CCRPC.CCRPCMain()
 	return
 }
@@ -703,24 +703,17 @@ func (app *App) GetCCRPCForkBlock() int64 {
 
 func (app *App) Commit() abcitypes.ResponseCommit {
 	app.logger.Debug("Enter commit!", "collected txs", app.txEngine.CollectedTxsCount())
-	app.mtx.Lock()
 	ctx := app.GetRunTxContext()
 	CCRPCForkBlock := app.GetCCRPCForkBlock()
+	if app.currHeight >= CCRPCForkBlock {
+		app.CCRPC.ProcessCCRPC(ctx, app.GetLatestBlockNum(), app.block.Timestamp)
+	}
+	app.mtx.Lock()
 	app.logger.Debug(fmt.Sprintf("%d height is timestamp %d",
 		app.block.Number,
 		app.block.Timestamp,
 	))
-	if app.currHeight < CCRPCForkBlock {
-		app.updateValidatorsAndStakingInfo(ctx)
-	} else {
-		if app.CCRPC.CCRPCProcessed(ctx, app.GetLatestBlockNum(), app.block.Timestamp, nil) {
-			app.logger.Debug(fmt.Sprintf(
-				"ccrpc: crosschain epochs applied at %d with time %d",
-				app.block.Number,
-				app.block.Timestamp,
-			))
-		}
-	}
+	app.updateValidatorsAndStakingInfo(ctx)
 	ctx.Close(true) // context must be written back such that txEngine can read it in 'Prepare'
 
 	app.frontier = app.txEngine.Prepare(app.reorderSeed, 0, param.MaxTxGasLimit)

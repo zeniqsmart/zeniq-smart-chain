@@ -18,18 +18,23 @@ echo $zeniqd
 . ./crosschaintest.sh
 
 z_mainnet
-z_smartnet  # needs sudo then blocks
+
+z_main_height
+BC=$(($(z_main_height)+1))
+echo $BC
+
+z_smartnet  "[$BC,2,720]" # needs sudo then blocks
 
 # in other terminal
 . /tmp/tmp..../zinfo.sh
 . ./crosschaintest.sh
 
+z_main_height
+# if > 102
 z_crss_at_height 2
 h2=$(z_main_height)
 echo $h2
-z_main_crss_from_to $h2 $h2
-
-# NOW wait until 3 epochs (= 3 hours) are over
+z_main_crss_from_to $((h2-1)) $((h2+1))
 
 # miner address on mainnet
 echo $zaddr
@@ -38,9 +43,11 @@ echo $zaddrkey
 echo $zsmartaddr
 echo $zsmartaddrkey
 
-# after 3 hours this should not be 0
+# NOW wait until 3 epochs are over
+
 z_smart_balance $zsmartaddr
 z_smart_height
+z_main_height
 
 # spend the ZENIQ from crosschain
 zsmartaddrnewkey=$(z_smart_new)
@@ -59,20 +66,36 @@ zsenttx=$(z_smart_spend 20000000000000000000 $zsmartaddrnew1 $zsmartgenesis $zsm
 echo $zsenttx
 z_smart_balance $zsmartaddrnew1
 
-z_smart_height
-
 # To enter a container
-docker exec -it zeniq-smart-chain-node1-1 bash
+docker exec -it zeniq-smart-chain-node0-1 bash
 ps fax
 cd ~/.zeniqsmartd
 
+z_smart_height
+z_main_height
+
 # To stop a container
 docker ps
-docker stop zeniq-smart-chain-node1-1
-sudo rm -rf build/testnodes/node1/data
-ll build/testnodes/node1/
-docker start zeniq-smart-chain-node1-1
+docker stop zeniq-smart-chain-node3-1
+sudo rm -rf build/testnodes/node3/data
+ll build/testnodes/node3/
+docker start zeniq-smart-chain-node3-1
 docker ps
+
+docker stop zeniq-smart-chain-node0-1
+docker stop zeniq-smart-chain-node1-1
+docker stop zeniq-smart-chain-node2-1
+docker stop zeniq-smart-chain-node3-1
+
+docker start zeniq-smart-chain-node0-1
+docker start zeniq-smart-chain-node1-1
+docker start zeniq-smart-chain-node2-1
+docker start zeniq-smart-chain-node3-1
+
+docker logs zeniq-smart-chain-node0-1 | less
+docker logs zeniq-smart-chain-node1-1 | less
+docker logs zeniq-smart-chain-node2-1 | less
+docker logs zeniq-smart-chain-node3-1 | less
 
 # To stop all containers and processes
 # does not remove the bash scripts, though.
@@ -137,8 +160,8 @@ z_zeniqd() {
       echo "$i of 100 to fulfill COINBASE_MATURITY = 100"
       sleep 1
    done
-   echo "mining to $zaddr 1 block every 10 min"
-   bash -c "while true; do $zcli -datadir=$zdatadir -regtest generatetoaddress 1 $zaddr; sleep 600; done" &
+   echo "mining to $zaddr 1 block every 1 min"
+   bash -c "while true; do $zcli -datadir=$zdatadir -regtest generatetoaddress 1 $zaddr; sleep 60; done" &
    zgenpid=$!
 }
 
@@ -180,7 +203,7 @@ z_smartnet(){
 
    z_info
 
-   sudo $zsmartdir/docker_testnet.sh 0 $zsmartgenesis &>> $zdatadir/smarttestnet.log
+   sudo $zsmartdir/docker_testnet.sh 0 $zsmartgenesis "${1:-[103,2,720]}" &>> $zdatadir/smarttestnet.log
 }
 
 z_mainnet() {

@@ -100,7 +100,7 @@ newconfig(){
 sed -e '/^blocks-behind\s*=.*/d' -e '$ablocks-behind = 0' -i ~/.zeniqsmartd/config/app.toml
 sed -e '/^update-of-ads-log\s*=.*/d' -e '$aupdate-of-ads-log = false' -i ~/.zeniqsmartd/config/app.toml
 sed -e '/^cc-rpc-fork-block\s*=.*/d' -e '$acc-rpc-fork-block = 9123456789123456789' -i ~/.zeniqsmartd/config/app.toml
-sed -e '/^cc-rpc-epochs\s*=.*/d' -e '$acc-rpc-epochs = [[302400,1008,403200]]' -i ~/.zeniqsmartd/config/app.toml
+sed -e '/^cc-rpc-epochs\s*=.*/d' -e '$acc-rpc-epochs = [[302400,1008,1209600]]' -i ~/.zeniqsmartd/config/app.toml
 sed -e '/^height-revision\s*=.*/d' -e '$aheight-revision = [[0,7],[66123456,11]]' -i ~/.zeniqsmartd/config/app.toml
 }
 

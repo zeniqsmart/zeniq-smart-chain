@@ -91,8 +91,8 @@ For subsequent nodes copy and override above 3 files in, then edit.
   mainnet-rpc-password = "zeniq123"
   watcher-speedup = true
   zeniqsmart-rpc-url = "https://smart3.zeniq.network:9545"
-  # consensus-relevant: [[mainnetHeight>=184464,e>=6,>=2*e*10*60/3],...]
-  cc-rpc-epochs = [ [184464, 6, 2400], [185184, 144, 57600], [185472, 1008, 403200] ]
+  # consensus-relevant: [[mainnetHeight>=184464,n>=6,>=n*1200],...]
+  cc-rpc-epochs = [ [184464, 6, 7200], [185184, 144, 172800], [185472, 1008, 1209600] ]
   cc-rpc-fork-block = 11000011
   ```
 
@@ -128,6 +128,7 @@ regularly per epoch:
 - `cc-rpc-epochs` defines at what mainchain height which epoch length in blocks starts getting valid.
   n=1008 blocks would be about 1 week corresponding to one epoch length.
 - `cc-rpc-fork-block` is the smart height when this feature is activated in `zeniqsmartd`
+  Make this a nn earlier than the first main height in `cc-rpc-epochs`.
 
 In Zeniq mainchain a transaction with a special output's scriptPubKey
 `OP_FALSE OP_VERIFY OP_RETURN <agentdata>`
@@ -136,16 +137,13 @@ is called a crosschain transaction further down.
 
 The steps taken by `zeniqsmartd` are these:
 
-- after a processed epoch wait 1.5 epochs: the end of the next epoch and another half epoch
-- fetch the crosschain transactions for the next epoch, which is then 0.5 epochs old
-- the next time a new smart block is synced
-  the end of epoch time is mapped to a smart block height (EEBTSmartHeight).
-- n*200 smart blocks after the EEBTSmartHeight the crosschain transactions are booked onto smart accounts
-  defined by the public key of the crosschain transaction input.
-  There is a smart block about every 3 seconds and a mainchain block every 600 seconds (10 minutes).
-  3*200*n seconds should correspond to about one epoch.
+::
 
-The logs show "found ccrpc smart height" followed by the end of epoch smart height (`EEBTSmartHeight`)
-and the smart height when the epoch will be booked onto the smartchain network.
+  n=1008           # epoch
+  2*n              # 2016 fetch
+  nn_n = 10*60/3   # every 3 seconds smart, every 10 min main
+  nnmin = 2*n*nn_n # search back to find cc tx, a failure would be very probably with the min value
+  nn = 3*nnmin     # a safer value
+  nn/n == 1200     # in cc-rpc-epochs=[[main,n,nn]] make nn = 1200*n
 
 
