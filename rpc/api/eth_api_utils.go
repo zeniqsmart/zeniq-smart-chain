@@ -91,7 +91,7 @@ func blockToRpcResp(block *types.Block, txs []*types.Transaction, sigs [][65]byt
 		"transactions":     types.ToGethHashes(block.Transactions),
 		"uncles":           []string{},
 		"receiptsRoot":     gethcmn.Hash{},
-		"baseFeePerGas":    hexutil.Bytes(block.BaseFeePerGas[:]),
+		//else client libraries think EIP1559 supported: "baseFeePerGas":    hexutil.Bytes(block.BaseFeePerGas[:]),
 	}
 
 	if len(txs) > 0 {

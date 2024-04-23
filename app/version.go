@@ -5,5 +5,5 @@ var (
 	ClientID  = "zeniqsmartd"
 	GitCommit = ""
 	GitDate   = ""
-	GitTag    = "v0.6.4"
+	GitTag    = "v0.6.5"
 )
