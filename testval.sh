@@ -7,8 +7,6 @@ zmain
 zsmart
 
 Constants:
-- cc-rpc-epochs is [[1024,6,7200]], or the environment variable CCRPCEPOCHS (z_smartnet)
-- cc-rpc-fork-block = 0, but must be before 1024 main
 - zaddrkey,zaddr on mainnet
 - zsmartgenesiskey, zsmartgenesis on smartnet
 - zsmartaddrkey,zsmartaddr on smartnet
@@ -17,17 +15,28 @@ Usage for manual testing:
 
 . ./testval.sh
 
-#requires: jq and some python3 packages:
-z_install_tools_ubuntu
+z_install_tools_ubuntu # requires: jq and some python3 packages
 
-z_mainnet
+z_stop # if on a successive time
+
+z_mainnet # optional if on successive time
+
+z_start
+
+z_main_100
+
+zfirstmain=$(($(z_main_height)+2))
+export CCRPCEPOCHS=[[$zfirstmain,6,7200]]
 z_smartnet # this clears data and starts smartnet anew
 
-z_crss_spend_height $(($(z_main_height)-101))
+z_mk_key
+z_crosschain_spend_height $(($(z_main_height)-101))
 
-# NOW wait 3 epochs (3 hours if 6 blocks per epoch)
+echo "$(z_smart_height) WAIT about until $((6*10*60+7200))"
 
 z_smart_balance $zsmartaddr
+
+z_ccrpcinfos
 
 zsmartaddrnewkey=$(z_smart_new)
 zsmartaddrnew=$(z_smart_addr $zsmartaddrnewkey)
@@ -50,17 +59,15 @@ z_do(){
 z_mk_key(){
    zaddr="miGjG7bavFSYuhJAt4MvLCehqcx2osqDFc"
    zaddrkey="cRcgFjav8EBFAGxyz9dLrtjsnNV8aJyKBHLMYSuyDMYDNFso2rJa"
-   zsmartaddrkey=$(z_smartkey_from_main_pk $zaddr)
+   zsmartaddrkey=$(z_smartkey_from_main_pk $zaddrkey)
    zsmartaddr=$(z_smart_addr $zsmartaddrkey)
 }
 
 z_mainnet(){
-   systemctl stop zmain  &>/dev/null
-
    if ! [ -d ~/.zeniq_backup ]; then
       mv ~/.zeniq ~/.zeniq_backup
    fi
-
+   rm -rf ~/.zeniq
    mkdir -p ~/.zeniq
    thisipend=$(ip a | grep /16 | cut -d '/' -f 1 | cut -d '9' -f 2)
    other1=$((94+(((thisipend-4)+1) % 3)))
@@ -95,7 +102,7 @@ EOF
 Description="Zeniq CoreTest Testnet"
 
 [Service]
-ExecStart=/bin/zeniqd -regtest -printtoconsole
+ExecStart=/bin/zeniqd -regtest -txindex -printtoconsole
 WorkingDirectory=/root/
 User=root
 Restart=always
@@ -106,18 +113,6 @@ SyslogIdentifier=Zeniq-CoreTest-Testnet
 WantedBy=multi-user.target
 EOF
    systemctl daemon-reload
-   systemctl start zmain
-   sleep 3
-   # zaddr=$(z_do getnewaddress)
-   # echo $zaddr
-   # zaddrkey=$(z_do dumpprivkey $zaddr)
-   # echo $zaddrkey
-   z_mk_key
-   z_do importprivkey $zaddrkey # all nodes should have the miner wallet
-   kill -9 $zgenpid &>/dev/null
-   # (1+59)/2/3 == 10 # ie a mainnet block every 10  min on the everage
-   (while true; do z_do generatetoaddress 1 $zaddr &>/dev/null; sleep $((60*(1+RANDOM%59))); done) &
-   zgenpid=$!
 }
 
 z_main_100() {
@@ -129,7 +124,8 @@ z_main_100() {
 }
 
 z_smartnet() {
-   systemctl stop zsmart       &>/dev/null
+
+   systemctl stop zsmart &>/dev/null
 
    if ! [ -d ~/.zeniqsmartd_backup ]; then
       mv ~/.zeniqsmartd ~/.zeniqsmartd_backup
@@ -175,7 +171,6 @@ WantedBy=multi-user.target
 EOF
    systemctl daemon-reload
    systemctl start zsmart
-
    z_info
 }
 
@@ -189,14 +184,33 @@ zsmartaddr=$zsmartaddr
 zgenpid=$zgenpid
 zaddr=$zaddr
 zaddrkey=$zaddrkey
+CCRPCEPOCHS=$CCRPCEPOCHS
 EOF
    echo ". ~/zinfo.sh to work on another terminal"
 }
 
-z_cleanup(){
-   systemctl stop zmain &>/dev/null
+z_stop(){
+   if [ -e ~/zinfo.sh ]; then
+      source ~/zinfo.sh
+   fi
    systemctl stop zsmart &>/dev/null
+   systemctl stop zmain &>/dev/null
    kill -9 $zgenpid &>/dev/null
+}
+
+z_start(){
+   systemctl start zmain
+
+   sleep 3
+   # zaddr=$(z_do getnewaddress)
+   # echo $zaddr
+   # zaddrkey=$(z_do dumpprivkey $zaddr)
+   # echo $zaddrkey
+   z_mk_key
+   z_do importprivkey $zaddrkey # all nodes should have the miner wallet
+   # (1+59)/2/3 == 10 # ie a mainnet block every 10  min on the everage
+   (while true; do z_do generatetoaddress 1 $zaddr &>/dev/null; sleep $((60*(1+RANDOM%59))); done) &
+   zgenpid=$!
 }
 
 z_log_clear(){
@@ -246,7 +260,7 @@ z_smart_new() {
    python3 -c 'import eth_account as ea;print(f"{ea.Account.create().key.hex()}")'
 }
 
-z_crss_spend_height(){
+z_crosschain_spend_height(){
    zbh=$(z_do getblockhash $1)
    echo $zbh
    ztxh=$(z_do getblock $zbh | jq -r '.tx[0]')
@@ -256,7 +270,7 @@ z_crss_spend_height(){
    zfee=0.000002300
    znValue=$(python3 -c "print(f'{(($zvin-$zfee)*100000000):.0f}')")
    echo $znValue
-   zcrssdata=$(python3 -c "import struct;print((b'crss'+struct.pack('<Q',int($znValue))+b'mylabel').hex())")
+   zcrssdata=$(python3 -c "import struct;print((b'crss'+struct.pack('<Q',int($znValue))+b\"$2\").hex())")
    echo $zcrssdata
    zrawtx=$(z_do createrawtransaction '''[{"txid":"'''$ztxh'''","vout":0,"sequence":4294967295}]''' '''[{"data":"'''$zcrssdata'''"}]''' 1)
    echo $zrawtx
@@ -266,12 +280,13 @@ z_crss_spend_height(){
    echo $zsenttx
    # mine another block to include the tx
    z_do generatetoaddress 1 $zaddr
+   echo "Spent $1"
 }
 
 z_smartkey_from_main_pk() {
    python3 -c 'import base58
 import ecdsa
-privkey="'''$zaddrkey'''"
+privkey="'''$1'''"
 privkey_bin = base58.b58decode_check(privkey.encode())[1:-1]
 sk=ecdsa.SigningKey.from_string(privkey_bin, ecdsa.SECP256k1)
 print(sk.to_string().hex())
@@ -279,23 +294,39 @@ print(sk.to_string().hex())
 }
 
 z_smart_addr() {
-   python3 -c 'import eth_account as ea;print(f"{ea.Account.from_key('"'"$1"'"').address}")'
+python3 -c 'import eth_account as ea;print(f"{ea.Account.from_key('"'"$1"'"').address}")'
 }
 
-z_main_crss_from_to(){
-   z_do crosschain $1 $2
+z_main_crosschain(){
+z_do crosschain $1 $2
 }
 
 z_main_txblock(){
-   z_do getblock $(z_do gettransaction ${1:-$zsenttx} | jq -r '.blockhash')
+z_do getblock $(z_do gettransaction ${1:-$zsenttx} | jq -r '.blockhash')
+}
+
+z_main_block(){
+z_do getblock $(z_do getblockhash ${1:-$(z_main_height)})
+}
+
+z_main_tx(){
+z_do decoderawtransaction $(z_do getrawtransaction ${1:-$zsenttx})
 }
 
 z_main_height(){
-   z_do getblockcount
+z_do getblockcount
 }
 
 z_smart_height(){
-   python3 -c 'from web3 import Web3; w3 = Web3(); print(f"{w3.eth.get_block_number()}")'
+python3 -c 'from web3 import Web3; w3 = Web3(); print(f"{w3.eth.get_block_number()}")'
+}
+
+z_smart_block(){
+python3 -c 'from web3 import Web3; w3 = Web3(); print(Web3.to_json(w3.eth.get_block(hex('''${1:-$(z_smart_height)}'''))))'
+}
+
+z_ccrpcinfos(){
+curl -X POST --data '{"jsonrpc":"2.0","method":"zeniq_crosschainInfo","params":[0, '''$(z_smart_height)'''],"id":1}' -H "Content-Type: application/json" 127.0.0.1:8545
 }
 
 ##

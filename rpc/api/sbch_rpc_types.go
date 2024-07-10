@@ -7,8 +7,7 @@ import (
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
-	sbchapi "github.com/zeniqsmart/zeniq-smart-chain/api"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
+	"github.com/zeniqsmart/zeniq-smart-chain/api"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
@@ -55,44 +54,6 @@ func castNominations(nominations []*stake.Nomination) []*Nomination {
 		}
 	}
 	return rpcNominations
-}
-
-// CCEpoch
-
-type CCEpoch struct {
-	Number        hexutil.Uint64    `json:"number"`
-	StartHeight   hexutil.Uint64    `json:"startHeight"`
-	EndTime       int64             `json:"endTime"`
-	TransferInfos []*CCTransferInfo `json:"transferInfos"`
-}
-type CCTransferInfo struct {
-	UTXO         hexutil.Bytes  `json:"utxo"`
-	Amount       hexutil.Uint64 `json:"amount"`
-	SenderPubkey hexutil.Bytes  `json:"senderPubkey"`
-}
-
-func castCCEpochs(ccEpochs []*cctypes.CCEpoch) []*CCEpoch {
-	rpcEpochs := make([]*CCEpoch, len(ccEpochs))
-	for i, ccEpoch := range ccEpochs {
-		rpcEpochs[i] = &CCEpoch{
-			Number:        hexutil.Uint64(ccEpoch.Number),
-			StartHeight:   hexutil.Uint64(ccEpoch.StartHeight),
-			EndTime:       ccEpoch.EndTime,
-			TransferInfos: castTransferInfos(ccEpoch.TransferInfos),
-		}
-	}
-	return rpcEpochs
-}
-func castTransferInfos(ccTransferInfos []*cctypes.CCTransferInfo) []*CCTransferInfo {
-	rpcTransferInfos := make([]*CCTransferInfo, len(ccTransferInfos))
-	for i, ccTransferInfo := range ccTransferInfos {
-		rpcTransferInfos[i] = &CCTransferInfo{
-			UTXO:         ccTransferInfo.UTXO[:],
-			Amount:       hexutil.Uint64(ccTransferInfo.Amount),
-			SenderPubkey: ccTransferInfo.SenderPubkey[:],
-		}
-	}
-	return rpcTransferInfos
 }
 
 // CallDetail
@@ -145,7 +106,7 @@ type BlockHashOp struct {
 	Hash   gethcmn.Hash   `json:"hash"`
 }
 
-func toRpcCallDetail(detail *sbchapi.CallDetail) *CallDetail {
+func toRpcCallDetail(detail *api.CallDetail) *CallDetail {
 	callDetail := &CallDetail{
 		Status:                 1, // success
 		GasUsed:                hexutil.Uint64(detail.GasUsed),

@@ -13,8 +13,7 @@ import (
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/app"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
+	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 )
 
 type CallDetail struct {
@@ -117,13 +116,10 @@ type BackendService interface {
 	GetToAddressCount(addr common.Address) int64
 	GetSep20ToAddressCount(contract common.Address, addr common.Address) int64
 	GetSep20FromAddressCount(contract common.Address, addr common.Address) int64
-	GetEpochs(start, end uint64) ([]*stake.Epoch, error)
-	GetEpochList(from string) ([]*stake.Epoch, error)
-	GetCurrEpoch() *stake.Epoch
-	GetCCEpochs(start, end uint64) ([]*cctypes.CCEpoch, error)
 	GetSeq(address common.Address) uint64
 	GetPosVotes() map[[32]byte]*big.Int
 	GetSyncBlock(height int64) (blk []byte, err error)
+	CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
 
 	//tendermint info
 	NodeInfo() Info

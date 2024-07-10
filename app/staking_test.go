@@ -20,10 +20,7 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/watcher"
-	watchertypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
 const (
@@ -59,23 +56,7 @@ type MockRpcClient struct {
 func (m MockRpcClient) Dial()                     {}
 func (m MockRpcClient) Close()                    {}
 func (m MockRpcClient) NetworkSmartHeight() int64 { return 1 }
-func (m MockRpcClient) GetBlockByHeight(height int64, retry bool) *watchertypes.BCHBlock {
-	return &watchertypes.BCHBlock{ // must be not nil, else this data is used nowhere
-		Height:          m.GetMainnetHeight(),
-		Timestamp:       mainnettime,
-		HashId:          make([][32]byte, 1)[0],
-		ParentBlk:       make([][32]byte, 1)[0],
-		Nominations:     make([]stake.Nomination, 0),
-		CCTransferInfos: make([]*cctypes.CCTransferInfo, 0),
-	}
-}
-func (m MockRpcClient) GetBlockByHash(hash [32]byte) *watchertypes.BCHBlock {
-	return nil
-}
-func (m MockRpcClient) GetEpochs(start, end uint64) []*stake.Epoch {
-	return nil
-}
-func (m MockRpcClient) GetCCEpochs(start, end uint64) []*cctypes.CCEpoch {
+func (m MockRpcClient) GetBlockByHash(hash [32]byte) *ccrpctypes.MainBlock {
 	return nil
 }
 func (m MockRpcClient) IsConnected() bool {
@@ -85,12 +66,12 @@ func (m MockRpcClient) GetMainnetHeight() (height int64) {
 	n := int64(6)
 	return mainnetheight + 2*n - n/2 // -1 would_block
 }
-func (m MockRpcClient) FetchCC(first, last int64) (cc *ccrpctypes.CCrpcEpoch) {
-	cc, _ = watcher.DO_getCC(first, last, m.respData)
+func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctypes.CCrpcEpoch) {
+	cc, _ = ccrpc.DO_GetCrosschain(first, last, m.respData)
 	return
 }
 
-var _ watchertypes.RpcClient = MockRpcClient{}
+var _ ccrpctypes.RpcClient = MockRpcClient{}
 
 func TestStaking(t *testing.T) {
 	key1, addr1 := testutils.GenKeyAndAddr()
@@ -590,56 +571,6 @@ func TestStakingDetermination(t *testing.T) {
 		require.Equal(t, int64(0), vals.Validators[1].VotingPower)
 		require.Equal(t, int64(0), vals.Validators[2].VotingPower)
 		require.Equal(t, int64(0), vals.Validators[3].VotingPower)
-
-		_app.AddEpochForTest(&types.Epoch{
-			Nominations: []*types.Nomination{
-				{Pubkey: pubKey0, NominatedCount: 300},
-				{Pubkey: pubKey1, NominatedCount: 400},
-				{Pubkey: pubKey2, NominatedCount: 500},
-				{Pubkey: pubKey3, NominatedCount: 200},
-			},
-		})
-		_app.ExecTxsInBlock()
-
-		vals = _app.GetValidatorsInfo()
-		require.Len(t, vals.Validators, 4)
-		require.Len(t, vals.CurrValidators, 4)
-		require.Equal(t, int64(1), vals.Validators[0].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[1].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[2].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[3].VotingPower)
-
-		data = staking.PackEditValidator(addr3, [32]byte{'V', 'A', 'L', '3'})
-		tx, _ = _app.MakeAndExecTxInBlock(key3, staking.StakingContractAddress, 3000, data)
-		_app.EnsureTxSuccess(tx.Hash())
-
-		data = staking.PackRetire()
-		tx, _ = _app.MakeAndExecTxInBlock(key2, staking.StakingContractAddress, 0, data)
-		_app.EnsureTxSuccess(tx.Hash())
-
-		vals = _app.GetValidatorsInfo()
-		require.Len(t, vals.Validators, 4)
-		require.Len(t, vals.CurrValidators, 3)
-		require.Equal(t, int64(1), vals.Validators[0].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[1].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[3].VotingPower)
-
-		_app.AddEpochForTest(&types.Epoch{
-			Nominations: []*types.Nomination{
-				{Pubkey: pubKey0, NominatedCount: 100},
-				{Pubkey: pubKey1, NominatedCount: 200},
-				{Pubkey: pubKey2, NominatedCount: 300},
-				{Pubkey: pubKey3, NominatedCount: 400},
-			},
-		})
-		_app.ExecTxsInBlock()
-
-		vals = _app.GetValidatorsInfo()
-		require.Len(t, vals.Validators, 4)
-		require.Len(t, vals.CurrValidators, 3)
-		require.Equal(t, int64(1), vals.Validators[0].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[1].VotingPower)
-		require.Equal(t, int64(1), vals.Validators[3].VotingPower)
 
 		_app.Destroy()
 		if i == 0 {

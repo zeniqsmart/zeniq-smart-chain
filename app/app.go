@@ -47,10 +47,9 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/watcher"
-	watchertypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 
 	"github.com/zeniqsmart/zeniq-smart-chain/ccrpc"
+	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 )
 
 var (
@@ -80,6 +79,25 @@ var (
 	*/
 )
 
+var (
+	mainStartHeights = [...]int64{
+		121901, 123917, 125933, 127949, 129965, 131981, 133997, 136013, 138029,
+		140045, 142061, 144077, 146093, 148109, 150125, 152141, 154157, 156173,
+		158189, 160205, 162221, 164237, 166253, 168269, 170285, 172301, 174317,
+		176333, 178349, 180365, 182381, 184397, 186413, 188429, 190445, 192461,
+		194477, 196493, 198509, 200525, 202541, 204557, 206573, 208589, 210605,
+		212621, 214637, 216653}
+	mainEndTimes = [...]int64{
+		1655493388, 1656708178, 1657913318, 1659117037, 1660333525, 1661538992,
+		1662751048, 1663963628, 1665171804, 1666387339, 1667596930, 1668808103,
+		1670016286, 1671230243, 1672439080, 1673646974, 1674846192, 1676062145,
+		1677264872, 1678493252, 1679693750, 1680899064, 1682104404, 1683312425,
+		1684523135, 1685735117, 1686945653, 1688155407, 1689363327, 1690564098,
+		1691776545, 1692988845, 1694204584, 1695410336, 1696616840, 1697824405,
+		1699035453, 1700246287, 1701451583, 1702662933, 1703871725, 1705083467,
+		1706290414, 1707500717, 1708713749, 1709922444, 1711128053, 1712338342}
+)
+
 type IApp interface {
 	ChainID() *uint256.Int
 	GetRunTxContext() *types.Context
@@ -89,8 +107,6 @@ type IApp interface {
 	RunTxForRpc(gethTx *gethtypes.Transaction, sender gethcmn.Address, estimateGas bool, height int64) (*ebp.TxRunner, int64)
 	RunTxForSbchRpc(gethTx *gethtypes.Transaction, sender gethcmn.Address, height int64) (*ebp.TxRunner, int64)
 	GetCurrEpoch() *stake.Epoch
-	GetWatcherEpochList() []*stake.Epoch
-	GetAppEpochList() []*stake.Epoch
 	GetLatestBlockNum() int64
 	SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
@@ -99,6 +115,7 @@ type IApp interface {
 	IsArchiveMode() bool
 	GetBlockForSync(height int64) (blk []byte, err error)
 	GetCCRPCForkBlock() int64
+	CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
 }
 
 type App struct {
@@ -143,10 +160,6 @@ type App struct {
 	txEngine    ebp.TxExecutor
 	reorderSeed int64        // recorded in BeginBlock, used in Commit
 	frontier    ebp.Frontier // recorded in Commit, used in next block's CheckTx
-
-	//watcher
-	watcher   *watcher.Watcher
-	epochList []*stake.Epoch // caches the epochs collected by the watcher
 
 	//util
 	signer gethtypes.Signer
@@ -208,12 +221,15 @@ func validHeightRevision(e [][2]int64) {
 	}
 }
 
-func validCCRPCEpochs(e [][3]int64) {
+func validCCRPCEpochs(e [][]int64) {
 	if e == nil || len(e) == 0 {
 		panic("cc-rpc-epochs not set\n")
 	}
 	var lastee0 int64 = 0
 	for _, ee := range e {
+		if len(ee) < 3 {
+			panic("cc-rpc-epochs mast have at least 3 entries\n")
+		}
 		if ee[0] < lastee0 {
 			panic("cc-rpc-epochs block smaller than previous entry\n")
 		}
@@ -223,15 +239,15 @@ func validCCRPCEpochs(e [][3]int64) {
 		if ee[1] < 6 || ee[1] > 2500 {
 			panic(fmt.Sprintf("cc-rpc-epochs epoch count NOT smaller than 6 and NOT larger than 2500\n"))
 		}
-		if ee[2] < ee[1]*1200 || ee[2]%2 != 0 {
-			panic(fmt.Errorf("ccrpc: error: (%d,%d) second smart not even and >= 1200 times first main", ee[1], ee[2]))
+		if ee[2] < ee[1]*1000 || ee[2]%2 != 0 {
+			panic(fmt.Errorf("ccrpc: error: (%d,%d) second smart not even and >= 1000 times first main", ee[1], ee[2]))
 		}
 		lastee0 = ee[0]
 	}
 }
 
 func NewApp(config *param.ChainConfig, chainId *uint256.Int,
-	genesisWatcherHeight int64, logger log.Logger, rpccl watchertypes.RpcClient) (app *App) {
+	genesisWatcherHeight int64, logger log.Logger, rpccl ccrpctypes.RpcClient) (app *App) {
 
 	app = &App{}
 
@@ -241,6 +257,7 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 
 	app.logger = logger.With("module", "app")
 
+	app.logger.Info(fmt.Sprintf("Version %v \n", GitTag))
 	app.logger.Info(fmt.Sprintf("Revision %v \n", app.config.AppConfig.HeightRevision))
 
 	/*------ CCRPC check ------*/
@@ -329,25 +346,12 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 		staking.SaveStakingInfo(ctx, stakingInfo) // only executed at genesis
 	}
 
-	/*------set watcher------*/
-	lastEpochEndHeight := stakingInfo.GenesisMainnetBlockHeight + param.StakingNumBlocksInEpoch*stakingInfo.CurrEpochNum
-	app.watcher = watcher.NewWatcher(app.logger.With("module", "watcher"), lastEpochEndHeight, 0,
-		stakingInfo.CurrEpochNum, app.config, rpccl)
-	app.logger.Info(fmt.Sprintf(
-		"New watcher: mainnet url(%s) epochNum(%d) lastEpochEndHeight(%d) speedUp(%v) CCRPCForkBlock(%v) CCRPCEpochs(%v)\n",
-		config.AppConfig.MainnetRPCUrl, stakingInfo.CurrEpochNum, lastEpochEndHeight, config.AppConfig.Speedup,
-		CCRPCForkBlock, config.AppConfig.CCRPCEpochs,
-	))
-
 	r := time.Duration(rand.Int() % 1000)
 	time.Sleep(r * time.Millisecond)
 
-	app.watcher.CheckMainnet()
-	catchupChan := make(chan bool, 1)
-	go app.watcher.WatcherMain(catchupChan)
-	<-catchupChan
-	app.CCRPC = ccrpc.Newccrpc(app.logger.With("module", "ccrpc"), app.config, rpccl, ctx)
-	go app.CCRPC.CCRPCMain()
+	/*------CCRPC------*/
+	app.CCRPC = ccrpc.Newccrpc(app.logger.With("module", "ccrpc"), app.config, rpccl)
+
 	return
 }
 
@@ -598,11 +602,6 @@ func (app *App) createGenesisAccounts(alloc gethcore.GenesisAlloc) {
 }
 
 func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
-
-	// if req.Header.Height == 11969608 {
-	// 	panic("wanted safety exit")
-	// }
-
 	var stat unix.Statfs_t
 	wd, _ := os.Getwd()
 	unix.Statfs(wd, &stat)
@@ -613,27 +612,21 @@ func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBe
 
 	h := req.Header.Height
 	nBehind := app.config.AppConfig.BlocksBehind
-	for nBehind > 0 && nBehind+h > app.watcher.NetworkSmartHeight() {
-		// zeniqsmartRpcClient=zeniqsmart-rpc-url=ZeniqsmartRPCUrl
-		// assumed to have BlocksBehind=0
-		// as we get current height from there
-		time.Sleep(time.Duration(3 * time.Second))
+	if nBehind > 0 {
+		smartRpcClient := ccrpc.NewRpcClient(app.config.AppConfig.ZeniqsmartRPCUrl, "", "", "application/json", app.logger)
+		for nBehind+h > smartRpcClient.NetworkSmartHeight() {
+			time.Sleep(time.Duration(3 * time.Second))
+		}
 	}
 
-	CCRPCForkBlock := app.GetCCRPCForkBlock()
-	// When ccrpc becomes active we are already rolling. No need to wait there.
-	if h < CCRPCForkBlock {
-		for {
-			// Don't even start smart block processing
-			// unless mainnet is reachable and enough blocks have been fetched.
-			wTS := app.watcher.GetCurrMainnetBlockTimestamp() + 12*3600
-			if app.block.Timestamp <= wTS {
-				break
-			}
-			app.logger.Info(fmt.Sprintf(
-				"catchup... block timestamp %v waiting for watcher %v", app.block.Timestamp, wTS))
-			time.Sleep(time.Duration(30 * time.Second))
+	for {
+		require_mainnet_time := app.block.Timestamp - 3600
+		mainnet_time := app.CCRPC.MainTime(app.CCRPC.MainHeight())
+		if require_mainnet_time <= mainnet_time {
+			break
 		}
+		app.logger.Info(fmt.Sprintf("waiting till mainnet reaches %v (currently %v)", require_mainnet_time, mainnet_time))
+		time.Sleep(time.Duration(30 * time.Second))
 	}
 
 	app.block = &types.Block{
@@ -650,7 +643,7 @@ func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBe
 		}
 	}
 	copy(app.block.ParentHash[:], req.Header.LastBlockId.Hash)
-	copy(app.block.TransactionsRoot[:], req.Header.DataHash) //TODO changed to committed tx hash
+	copy(app.block.TransactionsRoot[:], req.Header.DataHash)
 	app.reorderSeed = 0
 	if len(req.Header.DataHash) >= 8 {
 		app.reorderSeed = int64(binary.LittleEndian.Uint64(req.Header.DataHash[0:8]))
@@ -701,14 +694,18 @@ func (app *App) GetCCRPCForkBlock() int64 {
 	return int64(app.config.AppConfig.CCRPCForkBlock)
 }
 
+func (app *App) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
+	return app.CCRPC.CrosschainInfo(start, end)
+}
+
 func (app *App) Commit() abcitypes.ResponseCommit {
 	app.logger.Debug("Enter commit!", "collected txs", app.txEngine.CollectedTxsCount())
+	app.mtx.Lock()
 	ctx := app.GetRunTxContext()
 	CCRPCForkBlock := app.GetCCRPCForkBlock()
 	if app.currHeight >= CCRPCForkBlock {
-		app.CCRPC.ProcessCCRPC(ctx, app.GetLatestBlockNum(), app.block.Timestamp)
+		app.CCRPC.ProcessCCRPC(ctx, app.currHeight, app.block.Timestamp)
 	}
-	app.mtx.Lock()
 	app.logger.Debug(fmt.Sprintf("%d height is timestamp %d",
 		app.block.Number,
 		app.block.Timestamp,
@@ -736,7 +733,7 @@ func (app *App) getBlockRewardAndUpdateSysAcc(ctx *types.Context) *uint256.Int {
 	}
 	//if there has tx in standbyQ, it means there has some gasFee prepay to system account in app.prepare should not distribute in this block.
 	//if standbyQ is empty, we distribute all system account balance as reward in that block,
-	//which have all bch sent to system account through external transfer in blocks standbyQ not empty, this is not fair but simple, and this is rarely the case now.
+	//which have all coin sent to system account through external transfer in blocks standbyQ not empty, this is not fair but simple, and this is rarely the case now.
 	var blockReward = app.lastGasFee //distribute previous block gas fee
 	if app.txEngine.StandbyQLen() == 0 {
 		// distribute extra balance to validators
@@ -746,7 +743,6 @@ func (app *App) getBlockRewardAndUpdateSysAcc(ctx *types.Context) *uint256.Int {
 		//block reward is subtracted from systemAcc here, and will be added to stakingAcc in SlashAndReward.
 		err := ebp.SubSystemAccBalance(ctx, &blockReward)
 		if err != nil {
-			//todo: be careful
 			panic(err)
 		}
 	}
@@ -769,58 +765,39 @@ func (app *App) updateValidatorsAndStakingInfo(ctx *types.Context) {
 		app.lastProposer, app.lastVoters, app.getBlockRewardAndUpdateSysAcc(ctx))
 	app.slashValidators = app.slashValidators[:0]
 
-	if param.IsAmber && ctx.IsXHedgeFork() {
-		//make fake epoch after xHedgeFork, change amber to pure pos
-		if (app.currHeight%param.AmberBlocksInEpochAfterXHedgeFork == 0) && (app.currHeight > (ctx.XHedgeForkBlock + param.AmberBlocksInEpochAfterXHedgeFork/2)) {
-			e := &stake.Epoch{}
-			app.epochList = append(app.epochList, e)
-			app.logger.Debug("Get new fake epoch")
-			select {
-			case <-app.watcher.EpochChan:
-				app.logger.Debug("ignore epoch from watcher after xHedgeFork")
-			default:
-			}
-		}
-	} else {
-		select {
-		case epoch := <-app.watcher.EpochChan:
-			app.epochList = append(app.epochList, epoch)
-			app.logger.Debug(fmt.Sprintf("Get new epoch, epochNum(%d), startHeight(%d), epochListLens(%d)",
-				epoch.Number, epoch.StartHeight, len(app.epochList)))
-		default:
-		}
+	//epoch switch delay time should bigger than 10 mainnet block interval as of block finalization need
+	epochSwitchDelay := param.StakingEpochSwitchDelay
+	// this 20 is hardcode to fix the 20220520 node not upgrade error. don't modify it ever.
+	if currEpochNum == 20 {
+		epochSwitchDelay = param.StakingEpochSwitchDelay * 10
 	}
 
-	if len(app.epochList) != 0 {
-		//epoch switch delay time should bigger than 10 mainnet block interval as of block finalization need
-		epochSwitchDelay := param.StakingEpochSwitchDelay
-		// this 20 is hardcode to fix the 20220520 bch node not upgrade error. don't modify it ever.
-		if currEpochNum == 20 {
-			// make epoch switch delay in epoch 20th 50% longer.
-			epochSwitchDelay = param.StakingEpochSwitchDelay * 10
-		}
-		if app.block.Timestamp > app.epochList[0].EndTime+epochSwitchDelay {
+	if app.GetCCRPCForkBlock() > 0 { // 0 for test net starting with ccrpc from 0
+		cen := currEpochNum
+		lentimes := int64(len(mainEndTimes)) // no staking epochs afterwards
+		if cen < lentimes && app.block.Timestamp > mainEndTimes[cen]+epochSwitchDelay {
 			app.logger.Debug(fmt.Sprintf("Switch epoch at block(%d), eppchNum(%d)",
-				app.block.Number, app.epochList[0].Number))
-			var posVotes map[[32]byte]int64
+				app.block.Number, mainStartHeights[cen]))
+			var e *stake.Epoch
+			e = &stake.Epoch{
+				Number:      cen + 1,
+				StartHeight: mainStartHeights[cen],
+				EndTime:     mainEndTimes[cen],
+			}
 			var xHedgeSequence = param.XHedgeContractSequence
+			var posVotes map[[32]byte]int64
 			if ctx.IsXHedgeFork() {
 				//deploy xHedge contract before fork
 				posVotes = staking.GetAndClearPosVotes(ctx, xHedgeSequence)
 			}
-			newValidators = staking.SwitchEpoch(ctx, app.epochList[0], posVotes, app.logger)
-			app.epochList = app.epochList[1:] // possible memory leak here, but the length would not be very large
+			newValidators = staking.SwitchEpoch(ctx, e, posVotes, app.logger)
 			if ctx.IsXHedgeFork() {
 				staking.CreateInitVotes(ctx, xHedgeSequence, newValidators)
 			}
 		}
 	}
 
-	if param.IsAmber && app.currHeight == 4435201 {
-		app.validatorUpdate = nil
-	} else {
-		app.validatorUpdate = stake.GetUpdateValidatorSet(currValidators, newValidators)
-	}
+	app.validatorUpdate = stake.GetUpdateValidatorSet(currValidators, newValidators)
 	for _, v := range app.validatorUpdate {
 		app.logger.Debug(fmt.Sprintf("Updated validator in commit: address(%s), pubkey(%s), voting power: %d",
 			gethcmn.Address(v.Address).String(), ed25519.PubKey(v.Pubkey[:]), v.VotingPower))
@@ -1166,14 +1143,14 @@ func (app *App) IsArchiveMode() bool {
 }
 
 func (app *App) GetCurrEpoch() *stake.Epoch {
-	return app.watcher.GetCurrEpoch()
-}
-
-func (app *App) GetAppEpochList() []*stake.Epoch {
-	return stake.CopyEpochs(app.epochList)
-}
-func (app *App) GetWatcherEpochList() []*stake.Epoch {
-	return app.watcher.GetEpochList()
+	ctx := app.GetRpcContext()
+	stakingInfo := staking.LoadStakingInfo(ctx)
+	lastEpochEndHeight := stakingInfo.GenesisMainnetBlockHeight + param.StakingNumBlocksInEpoch*stakingInfo.CurrEpochNum
+	epoch := &stake.Epoch{
+		StartHeight: lastEpochEndHeight + 1,
+		Nominations: make([]*stake.Nomination, 0, 10),
+	}
+	return epoch
 }
 
 func (app *App) GetBlockForSync(height int64) (blk []byte, err error) {

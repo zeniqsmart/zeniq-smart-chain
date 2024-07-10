@@ -9,7 +9,6 @@ import (
 	"github.com/holiman/uint256"
 
 	mevmtypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
-	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
@@ -31,7 +30,7 @@ func GetAndClearPosVotes(ctx *mevmtypes.Context, xHedgeContractSeq uint64) map[[
 		coindaysBz := ctx.GetAndDeleteValueAtMapKey(xHedgeContractSeq, SlotValidatorsMap, string(val))
 		coindays.SetBytes(coindaysBz)
 		coindays.Div(coindays, CoindayUnit)
-		if ctx.IsXHedgeFork() && ((param.IsAmber && ctx.Height >= 3600000) || !param.IsAmber) {
+		if ctx.IsXHedgeFork() {
 			if !coindays.IsZero() {
 				posVotes[pubkey] = int64(coindays.Uint64())
 			}

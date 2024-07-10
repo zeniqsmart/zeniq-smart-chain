@@ -40,6 +40,8 @@ This creates:
 ~/.zeniqsmartd/data
 ```
 
+`~/.zeniqsmartd/data` contains the network data.
+
 For the first node, edit
 
 ```
@@ -69,7 +71,6 @@ For subsequent nodes copy and override above 3 files in, then edit.
 - `~/.zeniqsmartd/config/app.toml` configures the Tendermind application, i.e. the `zeniqsmartd` proper.
 
   - `cc-rpc-epochs` and `cc-rpc-fork-block` are consensus-relevant and must be the same in all nodes
-  - `watcher-speedup` will fetch epoch history from other smart nodes
 
 
   ``` toml
@@ -89,61 +90,37 @@ For subsequent nodes copy and override above 3 files in, then edit.
   mainnet-genesis-height = 121900
   mainnet-rpc-username = "zeniq"
   mainnet-rpc-password = "zeniq123"
-  watcher-speedup = true
   zeniqsmart-rpc-url = "https://smart3.zeniq.network:9545"
-  # consensus-relevant: [[mainnetHeight>=184464,n>=6,>=n*1200],...]
-  cc-rpc-epochs = [ [184464, 6, 7200], [185184, 144, 172800], [185472, 1008, 1209600] ]
+  # consensus-relevant:
+  cc-rpc-epochs = [ [184464, 6, 7200], [185184, 144, 172800], [185472, 1008, 1209600, 9876543211] ]
   cc-rpc-fork-block = 11000011
   ```
 
 New app.toml settings:
 
-- `cc-rpc-epochs` see below
-- `cc-rpc-fork-block` see below
+- `cc-rpc-epochs`:
+  `zeniqsmartd` calls the `zeniqd` RPC function `crosschain` to fetch and account
+  `OP_FALSE OP_VERIFY OP_RETURN <agentdata>` transactions from mainchain.
+  This is called the `CCRPC` feature in `zeniqsmartd` (`cc-rpc-` in `app.toml`).
+
+  Each entry has 3 or 4 numbers:
+
+  - mainchain height
+  - epoch length in mainchain blocks
+  - how much delay in smart blocks before accounting an epoch
+  - optionally a 4th `minimum` tells to filter `crosschain` by minimum in Satoshi
+
+- `cc-rpc-fork-block` is the smart height when the `CCRPC` feature is activated in `zeniqsmartd`.
+
 - `blocks-behind = 0`, 0 being default, can be set other than 0 to keep a running backup.
-  The sync alway keeps the given number of blocks behind the current head of validators.
+  The sync always keeps the given number of blocks behind the current head of validators.
+
 - 'update-of-ads-log = false', can be set true temporarily to create text files
   `updateOfADS<height>.txt` in the ~/.zeniqsmartd/data/app folder
   showing which 'key=value/old' changes (keys that got a new value over an old one)
   happened at that height.
   This overlaps with `with-syncdb`, which stores in a db but without the old value.
 
-
-Start via 
-
-```
-zeniqsmartd start
-```
-
-`~/.zeniqsmartd/data` contains the network data.
-The sync takes 3-9 days.
-
-### CCRPC
-
-`zeniqsmartd` implements crosschain in one direction
-from Zeniq mainchain to the smart chain
-by calling the Zeniq RPC function "crosschain"
-regularly per epoch:
-
-- `cc-rpc-epochs` defines at what mainchain height which epoch length in blocks starts getting valid.
-  n=1008 blocks would be about 1 week corresponding to one epoch length.
-- `cc-rpc-fork-block` is the smart height when this feature is activated in `zeniqsmartd`
-  Make this a nn earlier than the first main height in `cc-rpc-epochs`.
-
-In Zeniq mainchain a transaction with a special output's scriptPubKey
-`OP_FALSE OP_VERIFY OP_RETURN <agentdata>`
-that makes the input unusable in mainchain, i.e. burns it there,
-is called a crosschain transaction further down.
-
-The steps taken by `zeniqsmartd` are these:
-
-::
-
-  n=1008           # epoch
-  2*n              # 2016 fetch
-  nn_n = 10*60/3   # every 3 seconds smart, every 10 min main
-  nnmin = 2*n*nn_n # search back to find cc tx, a failure would be very probably with the min value
-  nn = 3*nnmin     # a safer value
-  nn/n == 1200     # in cc-rpc-epochs=[[main,n,nn]] make nn = 1200*n
+Use zeniqsmartd's `zeniq_crosschainInfo` for infos on applied `crosschain` transactions.
 
 

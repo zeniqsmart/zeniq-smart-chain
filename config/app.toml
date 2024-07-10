@@ -3,7 +3,6 @@ retain-blocks = -1
 retain_interval_blocks = 100
 use_litedb = false
 blocks_kept_ads = 10000
-watcher-speedup=true
 blocks_kept_db = -1
 sig_cache_size = 20000
 trunk_cache_size = 200

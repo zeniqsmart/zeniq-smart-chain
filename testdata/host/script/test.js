@@ -5,8 +5,7 @@ const BN = require('bignumber.js');
 
 const interval = 5 * 1000
 const testHostAddress = '0x35f2E649D46A7EfF8ffF24b8dd285e1bfAEE997C'
-const amberNodeUrl = 'http://52.77.241.179:8545'
-const provider = new web3(new web3.providers.HttpProvider(amberNodeUrl));
+const provider = new web3(new web3.providers.HttpProvider('http://52.77.241.179:8545'));
 const testContract = new provider.eth.Contract(abi.testHostAbi, testHostAddress);
 
 let preBlockNum;

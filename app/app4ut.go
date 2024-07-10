@@ -6,7 +6,6 @@ import (
 
 	dbtypes "github.com/zeniqsmart/db-zeniq-smart-chain/types"
 	evmtc "github.com/zeniqsmart/evm-zeniq-smart-chain/evmwrap/testcase"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 func (app *App) Logger() log.Logger {
@@ -32,16 +31,6 @@ func (app *App) CloseTrunk() {
 }
 func (app *App) CloseTxEngineContext() {
 	app.txEngine.Context().Close(false)
-}
-
-func (app *App) AddEpochForTest(e *stake.Epoch) { // breaks normal function, only used in test
-	app.watcher.EpochChan <- e
-}
-
-func (app *App) AddBlockFotTest(dbBlock *dbtypes.Block) { // breaks normal function, only used in test
-	app.historyStore.AddBlock(dbBlock, -1, nil)
-	app.historyStore.AddBlock(nil, -1, nil) // To Flush
-	app.publishNewBlock(dbBlock)
 }
 
 func (app *App) SumAllBalance() *uint256.Int {

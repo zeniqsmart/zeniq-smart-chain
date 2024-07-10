@@ -22,7 +22,6 @@ cd /zeniq_smart/zeniq-smart-chain
 cat $HOME/.zeniqsmartd/config/app.toml
 sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $HOME/.zeniqsmartd/config/app.toml
 # ... too slow startup
-# sed -i "s/watcher-speedup/#\0/g" $HOME/.zeniqsmartd/config/app.toml
 # sed -i "s/zeniqsmart-rpc-url.*/#\0/g" $HOME/.zeniqsmartd/config/app.toml
 ./build/zeniqsmartd start --testing
 exit

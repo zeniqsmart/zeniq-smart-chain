@@ -527,7 +527,6 @@ func addBlock(_app *testutils.TestApp, block *dbtypes.Block) {
 		Header: tmproto.Header{Height: block.Height},
 	})
 	_app.StoreBlocks(block)
-	_app.AddBlockFotTest(block)
 }
 
 func newTopicsFilter(t *testing.T, _api PublicFilterAPI, topics [][]gethcmn.Hash) gethrpc.ID {

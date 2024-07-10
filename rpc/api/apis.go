@@ -31,6 +31,7 @@ func GetAPIs(backend sbchapi.BackendService,
 	_web3API := newWeb3API(logger)
 	_txPoolAPI := newTxPoolAPI(logger)
 	_sbchAPI := newSbchAPI(backend, logger)
+	_zeniqAPI := newSbchAPI(backend, logger)
 	_debugAPI := newDebugAPI(_ethAPI, logger)
 	//_evmAPI := newEvmAPI(backend)
 
@@ -74,7 +75,7 @@ func GetAPIs(backend sbchapi.BackendService,
 		{
 			Namespace: namespaceZeniq,
 			Version:   apiVersion,
-			Service:   _sbchAPI,
+			Service:   _zeniqAPI,
 			Public:    true,
 		},
 		{

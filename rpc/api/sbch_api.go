@@ -14,10 +14,9 @@ import (
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	sbchapi "github.com/zeniqsmart/zeniq-smart-chain/api"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
+	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	rpctypes "github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 var _ SbchAPI = (*sbchAPI)(nil)
@@ -32,16 +31,12 @@ type SbchAPI interface {
 	GetTxListByHeightWithRange(height gethrpc.BlockNumber, start, end hexutil.Uint64) ([]map[string]interface{}, error)
 	GetAddressCount(kind string, addr gethcmn.Address) hexutil.Uint64
 	GetSep20AddressCount(kind string, contract, addr gethcmn.Address) hexutil.Uint64
-	GetEpochs(start, end hexutil.Uint64) ([]*stake.Epoch, error)
-	GetEpochList(from string) ([]*StakingEpoch, error)
-	GetCurrEpoch(includesPosVotes *bool) (*StakingEpoch, error)
-	GetCCEpochs(start, end hexutil.Uint64) ([]*cctypes.CCEpoch, error)
-	GetCCEpochs2(start, end hexutil.Uint64) ([]*CCEpoch, error) // result is more human-readable
 	HealthCheck(latestBlockTooOldAge hexutil.Uint64) map[string]interface{}
 	GetTransactionReceipt(hash gethcmn.Hash) (map[string]interface{}, error)
 	Call(args rpctypes.CallArgs, blockNr gethrpc.BlockNumberOrHash) (*CallDetail, error)
 	ValidatorsInfo() json.RawMessage
 	GetSyncBlock(height hexutil.Uint64) (hexutil.Bytes, error)
+	CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
 }
 
 type sbchAPI struct {
@@ -195,59 +190,12 @@ func (sbch sbchAPI) GetSep20AddressCount(kind string, contract, addr gethcmn.Add
 	return hexutil.Uint64(0)
 }
 
-func (sbch sbchAPI) GetEpochs(start, end hexutil.Uint64) ([]*stake.Epoch, error) {
-	sbch.logger.Debug("zeniq_getEpochs")
-	if end == 0 {
-		end = start + 10
-	}
-	return sbch.backend.GetEpochs(uint64(start), uint64(end))
-}
-func (sbch sbchAPI) GetEpochList(from string) ([]*StakingEpoch, error) {
-	epochs, err := sbch.backend.GetEpochList(from)
-	if err != nil {
-		return nil, err
-	}
-	return castStakingEpochs(epochs), nil
-}
-func (sbch sbchAPI) GetCurrEpoch(includesPosVotes *bool) (*StakingEpoch, error) {
-	epoch := sbch.backend.GetCurrEpoch()
-	epoch.Number = sbch.backend.ValidatorsInfo().CurrEpochNum
-	ret := castStakingEpoch(epoch)
-
-	if includesPosVotes != nil && *includesPosVotes {
-		posVotes := sbch.backend.GetPosVotes()
-		for pubKey, coinDays := range posVotes {
-			ret.PosVotes = append(ret.PosVotes, &PosVote{
-				Pubkey:       pubKey,
-				CoinDaysSlot: (*hexutil.Big)(coinDays),
-				CoinDays:     coinDaysSlotToFloat(coinDays),
-			})
-		}
-	}
-
-	return ret, nil
-}
-
 func coinDaysSlotToFloat(coindaysSlot *big.Int) float64 {
 	fCoinDays, _ := big.NewFloat(0).Quo(
 		big.NewFloat(0).SetInt(coindaysSlot),
 		big.NewFloat(0).SetInt(staking.CoindayUnit.ToBig()),
 	).Float64()
 	return fCoinDays
-}
-
-func (sbch sbchAPI) GetCCEpochs(start, end hexutil.Uint64) ([]*cctypes.CCEpoch, error) {
-	if end == 0 {
-		end = start + 10
-	}
-	return sbch.backend.GetCCEpochs(uint64(start), uint64(end))
-}
-func (sbch sbchAPI) GetCCEpochs2(start, end hexutil.Uint64) ([]*CCEpoch, error) {
-	ccEpochs, err := sbch.GetCCEpochs(start, end)
-	if err != nil {
-		return nil, err
-	}
-	return castCCEpochs(ccEpochs), nil
 }
 
 func (sbch sbchAPI) HealthCheck(latestBlockTooOldAge hexutil.Uint64) map[string]interface{} {
@@ -317,4 +265,8 @@ func (sbch sbchAPI) ValidatorsInfo() json.RawMessage {
 func (sbch sbchAPI) GetSyncBlock(height hexutil.Uint64) (hexutil.Bytes, error) {
 	sbch.logger.Debug("zeniq_getSyncBlock")
 	return sbch.backend.GetSyncBlock(int64(height))
+}
+
+func (sbch sbchAPI) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
+	return sbch.backend.CrosschainInfo(start, end)
 }

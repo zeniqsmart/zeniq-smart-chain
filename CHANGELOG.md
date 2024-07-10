@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.6.1
+## v0.6.8
+
+* remove bch logic (watcher)
+
+## v0.6.7
 
 * ccrpc: cross chain fixes
 

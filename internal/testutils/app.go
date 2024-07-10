@@ -30,9 +30,6 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
-	wtypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
 )
 
 const (
@@ -56,19 +53,17 @@ var (
 
 type MockRpcClient struct{}
 
-func (m MockRpcClient) start()                                                     { go func() {}() }
-func (m MockRpcClient) Dial()                                                      {}
-func (m MockRpcClient) Close()                                                     {}
-func (m MockRpcClient) NetworkSmartHeight() int64                                  { return 1 }
-func (m MockRpcClient) GetMainnetHeight() (height int64)                           { return 1 }
-func (m MockRpcClient) GetBlockByHeight(height int64, retry bool) *wtypes.BCHBlock { return nil }
-func (m MockRpcClient) GetBlockByHash(hash [32]byte) *wtypes.BCHBlock              { return nil }
-func (m MockRpcClient) GetEpochs(start, end uint64) []*stake.Epoch                 { return nil }
-func (m MockRpcClient) GetCCEpochs(start, end uint64) []*cctypes.CCEpoch           { return nil }
-func (m MockRpcClient) FetchCC(first, last int64) (cc *ccrpctypes.CCrpcEpoch)      { return nil }
-func (m MockRpcClient) IsConnected() bool                                          { return true }
+func (m MockRpcClient) start()                           { go func() {}() }
+func (m MockRpcClient) Dial()                            {}
+func (m MockRpcClient) Close()                           {}
+func (m MockRpcClient) NetworkSmartHeight() int64        { return 1 }
+func (m MockRpcClient) GetMainnetHeight() (height int64) { return 1 }
+func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctypes.CCrpcEpoch) {
+	return nil
+}
+func (m MockRpcClient) IsConnected() bool { return true }
 
-var _ wtypes.RpcClient = MockRpcClient{}
+var _ ccrpctypes.RpcClient = MockRpcClient{}
 
 // var logger = log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 var nopLogger = log.NewNopLogger()
@@ -103,12 +98,12 @@ func CreateTestAppWithSyncDB(keys ...string) *TestApp {
 	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
 		keys, true, true, MockRpcClient{})
 }
-func CreateTestAppWithCC(rpccl wtypes.RpcClient, keys ...string) *TestApp {
+func CreateTestAppWithCC(rpccl ccrpctypes.RpcClient, keys ...string) *TestApp {
 	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
 		keys, false, false, rpccl)
 }
 
-func CreateTestAppWithArgs(args TestAppInitArgs, rpccl wtypes.RpcClient) *TestApp {
+func CreateTestAppWithArgs(args TestAppInitArgs, rpccl ccrpctypes.RpcClient) *TestApp {
 	startHeight := int64(0)
 	if args.StartHeight != nil {
 		startHeight = *args.StartHeight
@@ -140,7 +135,7 @@ func CreateTestAppWithArgs(args TestAppInitArgs, rpccl wtypes.RpcClient) *TestAp
 }
 
 func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.PubKey, initAmt *uint256.Int, keys []string,
-	archiveMode bool, withSyncDB bool, rpccl wtypes.RpcClient) *TestApp {
+	archiveMode bool, withSyncDB bool, rpccl ccrpctypes.RpcClient) *TestApp {
 
 	err := os.RemoveAll(testAdsDir)
 	if err != nil {
@@ -157,6 +152,10 @@ func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.Pub
 	p.AppConfig.SyncdbDataPath = testSyncDir
 	p.AppConfig.ArchiveMode = archiveMode
 	p.AppConfig.WithSyncDB = withSyncDB
+
+	if rpccl != nil {
+		p.AppConfig.CCRPCForkBlock = 0
+	}
 
 	_app := app.NewApp(p, bigutils.NewU256(1), 0, nopLogger, rpccl)
 	genesisData := app.GenesisData{
@@ -187,9 +186,6 @@ func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.Pub
 	_app.EndBlock(abci.RequestEndBlock{
 		Height: startHeight,
 	})
-	if startHeight > 1 {
-		_app.AddBlockFotTest(&dbtypes.Block{Height: startHeight - 1})
-	}
 	stateRoot := _app.Commit().Data
 	if debug {
 		fmt.Println("h: 0 StateRoot:", hex.EncodeToString(stateRoot))

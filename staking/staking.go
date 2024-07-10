@@ -1016,11 +1016,9 @@ func deliverMintRewardInEpoch(ctx *types.Context, stakingAcc *types.AccountInfo,
 func checkEpoch(ctx *types.Context, info stake.StakingInfo, epoch *stake.Epoch, posVotes map[[32]byte]int64, logger log.Logger) (bool, map[[32]byte]int64, []*stake.Validator) {
 	powTotalNomination, pubkey2power := getPubkey2Power(info, epoch, posVotes, logger)
 	activeValidators := stake.GetActiveValidators(info.Validators, MinimumStakingAmount)
-	if !(param.IsAmber && ctx.IsXHedgeFork()) {
-		if powTotalNomination < param.StakingNumBlocksInEpoch*int64(param.StakingMinVotingPercentPerEpoch)/100 {
-			logger.Debug("PoWTotalNomination not big enough", "PoWTotalNomination", powTotalNomination)
-			return false, pubkey2power, activeValidators
-		}
+	if powTotalNomination < param.StakingNumBlocksInEpoch*int64(param.StakingMinVotingPercentPerEpoch)/100 {
+		logger.Debug("PoWTotalNomination not big enough", "PoWTotalNomination", powTotalNomination)
+		return false, pubkey2power, activeValidators
 	}
 	if len(pubkey2power) < len(activeValidators)*param.StakingMinVotingPubKeysPercentPerEpoch/100 {
 		logger.Debug("Voting pubKeys smaller than MinVotingPubKeysPercentPerEpoch", "validator count", len(epoch.Nominations))

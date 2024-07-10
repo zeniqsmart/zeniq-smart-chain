@@ -74,7 +74,7 @@ func runConfigCmd(cmd *cobra.Command, args []string) error {
 		case "mainnet-rpc-url", "mainnet-rpc-username", "mainnet-rpc-password", "zeniqsmart-rpc-url":
 			tree.Set(key, value)
 
-		case "watcher-speedup", "use_litedb", "log-validators":
+		case "use_litedb", "log-validators":
 			boolVal, err := strconv.ParseBool(value)
 			if err != nil {
 				return err

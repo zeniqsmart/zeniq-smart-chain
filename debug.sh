@@ -35,7 +35,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 
     rm -rf ./build/zeniqsmartd_debug
     rm -rf ./build/libevmwrap.so
-    go build -o ./build/zeniqsmartd_debug ./cmd/zeniqsmartd
+    go build -gcflags '-N -l' -o ./build/zeniqsmartd_debug ./cmd/zeniqsmartd
     mv ../evm-zeniq-smart-chain/evmwrap/host_bridge/libevmwrap.so build
 
     export LD_LIBRARY_PATH=$THS/build:$LD_LIBRARY_PATH

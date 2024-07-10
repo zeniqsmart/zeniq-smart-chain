@@ -63,6 +63,6 @@ sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" $NODE_HOME/config/app.tom
 sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $NODE_HOME/config/app.toml
 
 $BD/zeniqsmartd start --home $NODE_HOME --unlock $TEST_KEYS --https.addr=off --wss.addr=off \
-  --http.api='eth,web3,net,txpool,sbch,debug' \
+  --http.api='eth,web3,net,txpool,sbch,zeniq,debug' \
   --log_level='json-rpc:debug,*:info'
 

@@ -1,5 +1,5 @@
-//go:build !params_testnet && !params_amber
-// +build !params_testnet,!params_amber
+//go:build !params_testnet
+// +build !params_testnet
 
 package param
 
@@ -34,10 +34,6 @@ const (
 	// ccEpoch params
 	BlocksInCCEpoch    int64 = 7
 	CCEpochSwitchDelay int64 = 3 * 20 / 20
-
-	// network params
-	IsAmber                           bool  = false
-	AmberBlocksInEpochAfterXHedgeFork int64 = 2016 * 10 * 60 / 6
 
 	// fork params
 	XHedgeContractSequence uint64 = 0x13311

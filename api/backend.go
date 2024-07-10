@@ -16,8 +16,7 @@ import (
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/app"
-	"github.com/zeniqsmart/zeniq-smart-chain/crosschain"
-	cctypes "github.com/zeniqsmart/zeniq-smart-chain/crosschain/types"
+	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
@@ -264,57 +263,6 @@ func (backend *apiBackend) GetCurrEpoch() *stake.Epoch {
 	return backend.app.GetCurrEpoch()
 }
 
-// [start, end)
-func (backend *apiBackend) GetEpochs(start, end uint64) ([]*stake.Epoch, error) {
-	if start >= end {
-		return nil, errors.New("invalid start or empty epochs")
-	}
-	ctx := backend.app.GetRpcContext()
-	defer ctx.Close(false)
-
-	result := make([]*stake.Epoch, 0, end-start)
-	info := staking.LoadStakingInfo(ctx)
-	for epochNum := int64(start); epochNum < int64(end) && epochNum <= info.CurrEpochNum; epochNum++ {
-		epoch, ok := staking.LoadEpoch(ctx, epochNum)
-		if ok {
-			result = append(result, &epoch)
-		}
-	}
-	return result, nil
-}
-
-func (backend *apiBackend) GetEpochList(from string) ([]*stake.Epoch, error) {
-	switch from {
-	case "watcher":
-		return backend.app.GetWatcherEpochList(), nil
-	case "app":
-		return backend.app.GetAppEpochList(), nil
-	case "storage":
-		fallthrough
-	default:
-		return backend.GetEpochs(0, 999)
-	}
-}
-
-// [start, end)
-func (backend *apiBackend) GetCCEpochs(start, end uint64) ([]*cctypes.CCEpoch, error) {
-	if start >= end {
-		return nil, errors.New("invalid start or empty cc epochs")
-	}
-	ctx := backend.app.GetRpcContext()
-	defer ctx.Close(false)
-
-	result := make([]*cctypes.CCEpoch, 0, end-start)
-	info := crosschain.LoadCCInfo(ctx)
-	for epochNum := int64(start); epochNum < int64(end) && epochNum <= info.CurrEpochNum; epochNum++ {
-		epoch, ok := crosschain.LoadCCEpoch(ctx, epochNum)
-		if ok {
-			result = append(result, &epoch)
-		}
-	}
-	return result, nil
-}
-
 func (backend *apiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
 	if blockNr == rpc.LatestBlockNumber {
 		blockNr = rpc.BlockNumber(backend.app.GetLatestBlockNum())
@@ -459,4 +407,8 @@ func (backend *apiBackend) GetPosVotes() map[[32]byte]*big.Int {
 
 func (backend *apiBackend) GetSyncBlock(height int64) (blk []byte, err error) {
 	return backend.app.GetBlockForSync(height)
+}
+
+func (backend *apiBackend) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
+	return backend.app.CrosschainInfo(start, end)
 }

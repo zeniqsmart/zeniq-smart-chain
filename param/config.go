@@ -47,13 +47,12 @@ type AppConfig struct {
 	// How many transactions are allowed to left in the mempool
 	// If more than this threshold, no further transactions can go in mempool
 	RecheckThreshold int `mapstructure:"recheck_threshold"`
-	//watcher config
+
 	MainnetRPCUrl      string `mapstructure:"mainnet-rpc-url"`
 	MainnetRPCUsername string `mapstructure:"mainnet-rpc-username"`
 	MainnetRPCPassword string `mapstructure:"mainnet-rpc-password"`
 	ZeniqsmartRPCUrl   string `mapstructure:"zeniqsmart-rpc-url"`
-	Speedup            bool   `mapstructure:"watcher-speedup"`
-	Testing            bool   `mapstructure:"watcher-speedup"`
+	Testing            bool   `mapstructure:"testing"`
 
 	FrontierGasLimit uint64 `mapstructure:"frontier-gaslimit"`
 
@@ -63,7 +62,7 @@ type AppConfig struct {
 
 	BlocksBehind   int64      `mapstructure:"blocks-behind"`
 	UpdateOfADSLog bool       `mapstructure:"update-of-ads-log"`
-	CCRPCEpochs    [][3]int64 `mapstructure:"cc-rpc-epochs"`
+	CCRPCEpochs    [][]int64  `mapstructure:"cc-rpc-epochs"`
 	CCRPCForkBlock int64      `mapstructure:"cc-rpc-fork-block"` // big number to disable CCRPC
 	HeightRevision [][2]int64 `mapstructure:"height-revision"`
 }
@@ -101,14 +100,13 @@ func DefaultAppConfigWithHome(home string) *AppConfig {
 		MainnetRPCUsername:      "zeniq",
 		MainnetRPCPassword:      "zeniq123",
 		ZeniqsmartRPCUrl:        "",
-		Speedup:                 true,
 		Testing:                 false,
 		FrontierGasLimit:        uint64(BlockMaxGas / 200), //5Million gas
 		ArchiveMode:             false,
 		WithSyncDB:              false,
 		BlocksBehind:            0,
 		UpdateOfADSLog:          false,
-		CCRPCEpochs:             [][3]int64{{184464, 6, 7200}},     // cc-rpc-epochs
+		CCRPCEpochs:             [][]int64{{184464, 6, 7200}},      // cc-rpc-epochs
 		CCRPCForkBlock:          math.MaxInt64 - 1000,              // -1000 to allow tests set StartHeight beyond
 		HeightRevision:          [][2]int64{{0, 7}, {14444444, 7}}, // 7=EVMC_ISTANBUL  is default from 0, 11=EVMC_SHANGHAI, next block > 14444444
 	}

@@ -21,14 +21,8 @@ echo evm-zeniq-smart-chain/types
 (cd ../zeniq-smart-chain/staking && go test -c -gcflags '-N -l' &> /dev/null && ./staking.test)
 echo zeniq-smart-chain/staking
 
-(cd ../zeniq-smart-chain/crosschain && go test -c -gcflags '-N -l' &> /dev/null && ./crosschain.test)
-echo zeniq-smart-chain/crosschain
-
 (cd ../zeniq-smart-chain/app && go test -c -gcflags '-N -l' &> /dev/null && ./app.test)
 echo zeniq-smart-chain/app
-
-(cd ../zeniq-smart-chain/watcher && go test -c -gcflags '-N -l' &> /dev/null && ./watcher.test)
-echo zeniq-smart-chain/watcher
 
 (cd ../zeniq-smart-chain/ccrpc && go test -c -gcflags '-N -l' &> /dev/null && ./ccrpc.test)
 echo zeniq-smart-chain/ccrpc

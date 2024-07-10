@@ -13,15 +13,16 @@ sudo ./docker_build.sh
 Manual testing:
 
 zeniqd=$HOME/zeniq-core_build/src/zeniqd
-echo $zeniqd
+echo "zeniqd=$zeniqd"
 
 . ./crosschaintest.sh
 
 z_mainnet
 
 z_main_height
-BC=$(($(z_main_height)+1))
-echo $BC
+# let some smart blocks accumulate
+BC=$(($(z_main_height)+10))
+echo "BC=$BC"
 
 z_smartnet  "[$BC,2,720]" # needs sudo then blocks
 
@@ -30,20 +31,22 @@ z_smartnet  "[$BC,2,720]" # needs sudo then blocks
 . ./crosschaintest.sh
 
 z_main_height
-# if > 102
-z_crss_at_height 2
-h2=$(z_main_height)
-echo $h2
-z_main_crss_from_to $((h2-1)) $((h2+1))
+echo "now $(z_main_height): if > $BC continue ..."
+
+z_crosschain_at_height 2 # or higher, but 1 not working
+zsentheight=$(z_main_height)
+echo "zsentheight=$zsentheight"
+z_main_crosschain_from_to $((zsentheight-1)) $((zsentheight+1))
+
+echo "$(z_smart_height) WAIT about until $((2*10*60+720))"
 
 # miner address on mainnet
-echo $zaddr
-echo $zaddrkey
+echo "zaddr=$zaddr"
+echo "zaddrkey=$zaddrkey"
+z_pub_from_priv $zaddrkey
 # accoring addres on smartnet
-echo $zsmartaddr
-echo $zsmartaddrkey
-
-# NOW wait until 3 epochs are over
+echo "zsmartaddr=$zsmartaddr"
+echo "zsmartaddrkey=$zsmartaddrkey"
 
 z_smart_balance $zsmartaddr
 z_smart_height
@@ -54,22 +57,6 @@ zsmartaddrnewkey=$(z_smart_new)
 zsmartaddrnew=$(z_smart_addr $zsmartaddrnewkey)
 z_smart_spend 20000000000000000000 $zsmartaddrnew
 z_smart_balance $zsmartaddrnew
-
-# spend from genesis alloc account
-zsmartaddrnew1key=$(z_smart_new)
-echo $zsmartaddrnew1key
-zsmartaddrnew1=$(z_smart_addr $zsmartaddrnew1key)
-echo $zsmartaddrnew1
-echo $zsmartgenesis
-echo $zsmartgenesiskey
-zsenttx=$(z_smart_spend 20000000000000000000 $zsmartaddrnew1 $zsmartgenesis $zsmartgenesiskey)
-echo $zsenttx
-z_smart_balance $zsmartaddrnew1
-
-# To enter a container
-docker exec -it zeniq-smart-chain-node0-1 bash
-ps fax
-cd ~/.zeniqsmartd
 
 z_smart_height
 z_main_height
@@ -82,19 +69,14 @@ ll build/testnodes/node3/
 docker start zeniq-smart-chain-node3-1
 docker ps
 
-docker stop zeniq-smart-chain-node0-1
-docker stop zeniq-smart-chain-node1-1
-docker stop zeniq-smart-chain-node2-1
-docker stop zeniq-smart-chain-node3-1
+z_ccrpcinfos
 
-docker start zeniq-smart-chain-node0-1
-docker start zeniq-smart-chain-node1-1
-docker start zeniq-smart-chain-node2-1
-docker start zeniq-smart-chain-node3-1
+# To enter a container
+docker exec -it zeniq-smart-chain-node0-1 bash
+ps fax
+cd ~/.zeniqsmartd
 
-docker logs zeniq-smart-chain-node0-1 | less
-docker logs zeniq-smart-chain-node1-1 | less
-docker logs zeniq-smart-chain-node2-1 | less
+# not logging to original file any more, instead do:
 docker logs zeniq-smart-chain-node3-1 | less
 
 # To stop all containers and processes
@@ -139,7 +121,7 @@ rpcallowip=192.168.0.0/16
 rpcuser=zeniq
 rpcpassword=zeniq123
 EOF
-   echo $zdatadir
+   echo "zdatadir=$zdatadir"
 }
 
 z_do(){
@@ -180,6 +162,7 @@ zsmartaddrkey=$zsmartaddrkey
 zsmartaddr=$zsmartaddr
 zsmartgenesiskey=$zsmartgenesiskey
 zsmartgenesis=$zsmartgenesis
+BC=$BC
 EOF
    echo ". $zdatadir/zinfo.sh to work on another terminal"
 }
@@ -210,8 +193,8 @@ z_mainnet() {
    #zeniqd=$HOME/zeniq-core_build/src/zeniqd
    z_datadir
    z_zeniqd
-   z_crss_at_height 1
-   z_main_crss_from_to 101 106
+   z_crosschain_at_height 1
+   z_main_crosschain_from_to 101 106
    echo "type z_smartnet to start the smart network of 4 docker nodes"
 }
 
@@ -248,24 +231,24 @@ z_smart_new() {
    python3 -c 'import eth_account as ea;print(f"{ea.Account.create().key.hex()}")'
 }
 
-z_crss_at_height(){
+z_crosschain_at_height(){
    zbh=$(z_do getblockhash $1)
-   echo $zbh
+   echo "zbh=$zbh"
    ztxh=$(z_do getblock $zbh | jq -r '.tx[0]')
-   echo $ztxh
+   echo "ztxh=$ztxh"
    zvin=$(z_do gettxout $ztxh 0 | jq -r '.value')
-   echo $zvin
+   echo "zvin=$zvin"
    zfee=0.000002300
    znValue=$(python3 -c "print(f'{(($zvin-$zfee)*100000000):.0f}')")
-   echo $znValue
+   echo "znValue=$znValue"
    zcrssdata=$(python3 -c "import struct;print((b'crss'+struct.pack('<Q',int($znValue))+b'mylabel').hex())")
-   echo $zcrssdata
+   echo "zcrssdata=$zcrssdata"
    zrawtx=$(z_do createrawtransaction '''[{"txid":"'''$ztxh'''","vout":0,"sequence":4294967295}]''' '''[{"data":"'''$zcrssdata'''"}]''' 1)
-   echo $zrawtx
+   echo "zrawtx=$zrawtx"
    zsignedtx=$(z_do signrawtransactionwithwallet $zrawtx | jq -r '.hex')
-   echo $zsignedtx
+   echo "zsignedtx=$zsignedtx"
    zsenttx=$(z_do sendrawtransaction $zsignedtx)
-   echo $zsenttx
+   echo "zsenttx=$zsenttx"
    # mine another block to include the tx
    z_do -regtest generatetoaddress 1 $zaddr
 }
@@ -284,7 +267,7 @@ z_smart_addr() {
    python3 -c 'import eth_account as ea;print(f"{ea.Account.from_key('"'"$1"'"').address}")'
 }
 
-z_main_crss_from_to(){
+z_main_crosschain_from_to(){
    curl -X POST --data-binary '{"jsonrpc":"1.0","id":"zeniqsmart","method":"crosschain","params":["'''$1'''","'''$2'''"]}' -H "Content-Type: application/json" http://zeniq:zeniq123@127.0.0.1:57319
    #found
    z_do crosschain $1 $2
@@ -311,4 +294,16 @@ z_smart_height(){
    python3 -c 'from web3 import Web3; w3 = Web3(); print(f"{w3.eth.get_block_number()}")'
 }
 
+z_pub_from_priv(){
+   python3 -c '
+import bitcoin.base58
+import bitcoin.wallet
+b58 = bitcoin.base58.CBase58Data("'''${zaddrkey:-$1}'''")
+ck = bitcoin.wallet.CKey(b58.to_bytes()[:-1])
+print(ck.pub.hex())
+'
+}
 
+z_ccrpcinfos(){
+curl -X POST --data '{"jsonrpc":"2.0","method":"zeniq_crosschainInfo","params":[0, '''$(z_smart_height)'''],"id":1}' -H "Content-Type: application/json" 172.18.188.10:8545
+}

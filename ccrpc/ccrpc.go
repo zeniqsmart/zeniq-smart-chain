@@ -19,16 +19,16 @@ import (
 	mevmtypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
-	"github.com/zeniqsmart/zeniq-smart-chain/watcher"
-	watchertypes "github.com/zeniqsmart/zeniq-smart-chain/watcher/types"
+
+	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
 )
 
 const (
-	//The final x value in CCRPCEpochs[x][1] should be 1008.
-	//Large enough to preclude a block reorg on mainnet
+	//The final x value in CCRPCEpochs[x][1] should be
+	//large enough to preclude a block reorg on mainnet
 	//as that would make a sync impossible later on.
 	ccrpcSequence uint64 = math.MaxUint64 - 5 /*uint64(-6)*/
-	queue                = 111
+	queue                = 1111
 )
 
 var (
@@ -58,47 +58,55 @@ type IContextGetter interface {
 
 type CCrpcImp struct {
 	logger         log.Logger
-	rpcMainnet     watchertypes.RpcClient
-	doneMainFetch  int64
+	rpcMainnet     ccrpctypes.RpcClient
 	ccrpcEpochList []*ccrpctypes.CCrpcEpoch
 	ccrpcEpochChan chan *ccrpctypes.CCrpcEpoch
-	CCRPCEpochs    [][3]int64
+	ccrpcEpochs    [][]int64
+	ccrpcInfos     []*ccrpctypes.CCrpcTransferInfo
+	ccrpcInfosMu   sync.Mutex
+	ccrpcSearchTo  int64
+	running        bool
 }
 
 // Create ccrpc handler.
-func Newccrpc(logger log.Logger, chainConfig *param.ChainConfig, rpcclient watchertypes.RpcClient, ctx *mevmtypes.Context) *CCrpcImp {
-	var doneMH int64
-	doneMH = loadDoneMain(ctx)
-	if doneMH == 0 {
-		doneMH = chainConfig.AppConfig.CCRPCEpochs[0][0] - 1
-	}
+func Newccrpc(logger log.Logger, chainConfig *param.ChainConfig, rpcclient ccrpctypes.RpcClient) *CCrpcImp {
 	var rpc = rpcclient
 	if rpc == nil {
-		rpc = watcher.NewRpcClient(
+		rpc = NewRpcClient(
 			chainConfig.AppConfig.MainnetRPCUrl,
 			chainConfig.AppConfig.MainnetRPCUsername,
 			chainConfig.AppConfig.MainnetRPCPassword,
 			"text/plain;", logger)
 	}
+	if !rpc.IsConnected() {
+		panic(fmt.Errorf("ccrpc: error: mainnet zeniqd not connected. smartzeniqd cannot run without"))
+	}
 	return &CCrpcImp{
 		logger:         logger,
 		rpcMainnet:     rpc,
-		doneMainFetch:  doneMH,
 		ccrpcEpochList: make([]*ccrpctypes.CCrpcEpoch, 0),
 		ccrpcEpochChan: make(chan *ccrpctypes.CCrpcEpoch, queue),
-		CCRPCEpochs:    chainConfig.AppConfig.CCRPCEpochs,
+		ccrpcEpochs:    chainConfig.AppConfig.CCRPCEpochs,
+		ccrpcInfos:     make([]*ccrpctypes.CCrpcTransferInfo, 0),
+		ccrpcInfosMu:   sync.Mutex{},
+		ccrpcSearchTo:  chainConfig.AppConfig.CCRPCForkBlock,
+		running:        false,
 	}
 }
 
-func (cc *CCrpcImp) getEpochMainDelaySmart(nextFirst int64) (n int64, nn int64) {
+func (cc *CCrpcImp) getEpoch(nextFirst int64) (n, nn, minimum int64) {
 	n = 0
 	nn = 0
-	for _, v := range cc.CCRPCEpochs {
+	for _, v := range cc.ccrpcEpochs {
 		if nextFirst < v[0] {
 			break
 		}
 		n = v[1]
 		nn = v[2]
+		minimum = 0
+		if len(v) > 3 {
+			minimum = v[3]
+		}
 	}
 	if n == 0 {
 		panic(fmt.Errorf("ccrpc: error: NOT OK cc-rpc-epochs at height %v", nextFirst))
@@ -106,31 +114,28 @@ func (cc *CCrpcImp) getEpochMainDelaySmart(nextFirst int64) (n int64, nn int64) 
 	return
 }
 
-// forward epochs to ProcessCCRPC
-func (cc *CCrpcImp) CCRPCMain() {
-	if !cc.rpcMainnet.IsConnected() {
-		panic(fmt.Errorf("ccrpc: error: CCRPCMain mainnet zeniqd not connected. smartzeniqd cannot run without"))
-	}
+func (cc *CCrpcImp) fetcher(ctx *mevmtypes.Context) {
 	var mainHeight int64 = 0
+	var doneFetch int64 = cc.ccrpcEpochs[0][0] - 1 // from beginning to build ccrpcInfos
 	for {
-		nextFirst := cc.doneMainFetch + 1
-		n, _ := cc.getEpochMainDelaySmart(nextFirst)
+		nextFirst := doneFetch + 1
+		n, _, minimum := cc.getEpoch(nextFirst)
 
 		nextLast := nextFirst + n - 1
 
 		startFetching := nextLast + n
 		for mainHeight < startFetching {
-			mainHeight = cc.rpcMainnet.GetMainnetHeight()
+			mainHeight = cc.MainHeight()
 			if mainHeight >= startFetching {
 				break
 			}
 			cc.suspended(time.Duration(60) * time.Second)
 		}
 
-		var ccrpcEpoch = cc.rpcMainnet.FetchCC(nextFirst, nextLast)
+		var ccrpcEpoch = cc.rpcMainnet.FetchCrosschain(nextFirst, nextLast, minimum)
 		if ccrpcEpoch != nil {
-			cc.doneMainFetch = ccrpcEpoch.LastHeight
-			cc.logger.Info(fmt.Sprintf("ccrpc: CCRPCMain: %d txs from (%d-%d) fetched at %d",
+			doneFetch = ccrpcEpoch.LastHeight
+			cc.logger.Info(fmt.Sprintf("ccrpc: fetcher: %d txs from (%d-%d) fetched at %d",
 				len(ccrpcEpoch.TransferInfos), nextFirst, nextLast, startFetching))
 			cc.ccrpcEpochChan <- ccrpcEpoch // contains EEBT=EpochEndBlockTime as given by mainnet
 		} else {
@@ -191,9 +196,26 @@ func blockAfterTime(
 	return found, 0
 }
 
-func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, blockNumber, timeStamp int64) (doneApply bool) {
+func (cc *CCrpcImp) MainHeight() int64 {
+	return cc.rpcMainnet.GetMainnetHeight()
+}
+
+func (cc *CCrpcImp) MainTime(h int64) int64 {
+	return cc.rpcMainnet.FetchCrosschain(h, h, 0).EpochEndBlockTime
+}
+
+func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime int64) (doneApply bool) {
 	doneApply = false
-	// cc.logger.Info(fmt.Sprintf("ccrpc: blockNumber %d, timeStamp %d", blockNumber, timeStamp))
+
+	if cc.ccrpcSearchTo > currHeight {
+		return
+	}
+	if cc.ccrpcSearchTo <= currHeight {
+		if !cc.running {
+			go cc.fetcher(ctx)
+			cc.running = true
+		}
+	}
 
 	var lastDoneMain int64 = loadDoneMain(ctx) // expecting 0 the first time
 	var nextDoneMain int64 = lastDoneMain
@@ -215,88 +237,119 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, blockNumber, timeStamp 
 		block, _ := ctx.GetBlockByHeight(uint64(bn))
 		return block != nil
 	}
-	ccrpcEpochChan := make(chan *ccrpctypes.CCrpcEpoch, thisLen)
+	delayChan := make(chan *ccrpctypes.CCrpcEpoch, thisLen)
+	infosMu := &sync.Mutex{}
+	infos := make([]*ccrpctypes.CCrpcTransferInfo, 0)
+	var nextCcrpcSearchTo int64 = cc.ccrpcSearchTo
+
 	processOne := func(cce *ccrpctypes.CCrpcEpoch) int64 {
-		n, nn := cc.getEpochMainDelaySmart(cce.FirstHeight)
+		n, nn, minimum := cc.getEpoch(cce.FirstHeight)
 		EEBT := cce.EpochEndBlockTime
-		cceLog := fmt.Sprintf("ccrpc: (%d-%d) %d txs EEBT %d",
-			cce.FirstHeight, cce.LastHeight, len(cce.TransferInfos), EEBT)
+		cceLog := fmt.Sprintf("ccrpc: (%d-%d), n %d, nn %d, minimum %d, %d txs, EEBT %d",
+			cce.FirstHeight, cce.LastHeight, n, nn, minimum, len(cce.TransferInfos), EEBT)
+		if currTime <= cce.EpochEndBlockTime+10 || currHeight <= 1 {
+			delayChan <- cce
+			return 0
+		}
+		// cce.EEBTSmartHeight also for cce.LastHeight < lastDoneMain to fill cc.ccrpcInfos
 		if cce.EEBTSmartHeight == 0 {
-			blockNumber_1 := blockNumber - 1
-			for ; blockNumber_1 > blockNumber-nn && !blOK(blockNumber_1); blockNumber_1-- {
+			backStart := currHeight - 1
+			backTo := cc.ccrpcSearchTo
+			for ; backStart > backTo && !blOK(backStart); backStart-- {
 			}
 			var above int64 = 0
-			cce.EEBTSmartHeight, above = blockAfterTime(ctx, blockNumber_1, nn, EEBT, cc.logger)
-			cc.logger.Info(fmt.Sprintf("%s search %d back %d => (%d + %d) or above %d", cceLog,
-				blockNumber_1, nn, cce.EEBTSmartHeight, nn, above))
+			searchBack := backStart - backTo
+			cce.EEBTSmartHeight, above = blockAfterTime(ctx, backStart, searchBack, EEBT, cc.logger)
+			cc.logger.Info(fmt.Sprintf("%s search from %d back %d to %d => %d or above %d", cceLog,
+				backStart, searchBack, backTo, cce.EEBTSmartHeight, above))
 			if above > 0 {
-				ccrpcEpochChan <- cce
+				delayChan <- cce
 				return 0
 			}
-			if cce.EEBTSmartHeight == 0 {
+			if cce.EEBTSmartHeight > atomic.LoadInt64(&nextCcrpcSearchTo) {
+				atomic.StoreInt64(&nextCcrpcSearchTo, cce.EEBTSmartHeight)
+				for _, ti := range cce.TransferInfos {
+					ti.ApplicationHeight = cce.EEBTSmartHeight + nn
+					ti.Receiver = ZeniqPubkeyToReceiverAddress(ti.SenderPubkey)
+					infosMu.Lock()
+					if cce.EEBTSmartHeight+nn <= currHeight {
+						amount := uint256.NewInt(0).Mul(uint256.NewInt(uint64(math.Round(ti.Amount*1e8))), uint256.NewInt(1e10))
+						ebp.AddCrosschain(amount)
+					}
+					infos = append(infos, ti)
+					infosMu.Unlock()
+				}
+			}
+			if cce.EEBTSmartHeight == 0 && /*for test*/ searchBack > 0 {
 				for _, ti := range cce.TransferInfos {
 					cc.logger.Info(fmt.Sprintf("%s ignored TransferInfo %v", cceLog, ti))
 				}
-				bFirst, _ := ctx.GetBlockByHeight(uint64(blockNumber_1 - nn))
-				bLast, _ := ctx.GetBlockByHeight(uint64(blockNumber_1))
-				var b1, b2 int64 = 0, 0
+				bFirst, _ := ctx.GetBlockByHeight(uint64(backTo))
+				bLast, _ := ctx.GetBlockByHeight(uint64(backStart))
+				var t1, t2 int64 = 0, 0
 				if bFirst != nil {
-					b1 = bFirst.Timestamp
+					t1 = bFirst.Timestamp
 				}
 				if bLast != nil {
-					b2 = bLast.Timestamp
+					t2 = bLast.Timestamp
 				}
-				panic(fmt.Errorf("%s not mapped within %d [%d,%d]", cceLog, nn, b1, b2))
+				panic(fmt.Errorf("%s not mapped within [%d,%d]. fix cc-rpc-epochs in app.toml", cceLog, t1, t2))
 			}
 		}
-		var nn_new int64 = nn
-		for cce.EEBTSmartHeight+nn_new < blockNumber {
-			nn_new += 1200 // 2*3*10*60/3
+		if cce.LastHeight > lastDoneMain {
+			var nn_new int64 = nn
+			for cce.EEBTSmartHeight+nn_new < currHeight {
+				nn_new += 1200 // 2*3*10*60/3
+			}
+			if nn_new > nn {
+				// panic else resync would fail since we came here none-deterministically
+				panic(fmt.Errorf("%s missed epoch. app.toml: add to cc-rpc-epochs [%d,%d,%d]",
+					cceLog, cce.FirstHeight, n, nn_new))
+			}
 		}
-		if nn_new > nn {
-			// panic else resync would fail since we came here none-deterministically
-			panic(fmt.Errorf("%s missed epoch. app.toml: add to cc-rpc-epochs [%d,%d,%d]",
-				cceLog, cce.FirstHeight, n, nn_new))
-		}
-		var thisApply = cce.EEBTSmartHeight + nn
-		if thisApply == blockNumber {
+		if cce.EEBTSmartHeight+nn == currHeight {
 			cc.logger.Info(fmt.Sprintf("%s mapped smart %d, applying now %d, delaying %d",
-				cceLog, cce.EEBTSmartHeight, blockNumber, (thisApply - cce.EEBTSmartHeight)))
+				cceLog, cce.EEBTSmartHeight, currHeight, nn))
 			for _, ti := range cce.TransferInfos {
 				AccountCcrpc(ctx, ti)
 			}
 			return cce.LastHeight // cce done
 		}
-		ccrpcEpochChan <- cce
+		delayChan <- cce
 		return 0 // cce for next time
 	}
 
 	var wg sync.WaitGroup
 	for _, cce := range cc.ccrpcEpochList {
-		//+10 because (blockNumber-blockNumber_1) is normally 2, i.e. 2*3.3 plus a bit
-		if timeStamp > cce.EpochEndBlockTime+10 && blockNumber > 1 && cce.LastHeight > lastDoneMain {
-			wg.Add(1)
-			go func(pcce *ccrpctypes.CCrpcEpoch) {
-				if nxt := processOne(pcce); nxt > atomic.LoadInt64(&nextDoneMain) {
-					atomic.StoreInt64(&nextDoneMain, nxt)
-				}
-				wg.Done()
-			}(cce)
-		} else {
-			ccrpcEpochChan <- cce
-		}
+		wg.Add(1)
+		go func(pcce *ccrpctypes.CCrpcEpoch) {
+			if nxt := processOne(pcce); nxt > atomic.LoadInt64(&nextDoneMain) {
+				atomic.StoreInt64(&nextDoneMain, nxt)
+			}
+			wg.Done()
+		}(cce)
 	}
 	wg.Wait()
+	cc.ccrpcSearchTo = nextCcrpcSearchTo
 	cc.ccrpcEpochList = nil
 	loop = true
 	for loop {
 		select {
-		case cce := <-ccrpcEpochChan:
+		case cce := <-delayChan:
 			cc.ccrpcEpochList = append(cc.ccrpcEpochList, cce)
 		default:
 			loop = false
 		}
 	}
+	sort.Slice(cc.ccrpcEpochList, func(i, j int) bool {
+		return cc.ccrpcEpochList[i].LastHeight < cc.ccrpcEpochList[j].LastHeight
+	})
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].EpochEndHeight < infos[j].EpochEndHeight
+	})
+	cc.ccrpcInfosMu.Lock()
+	cc.ccrpcInfos = append(cc.ccrpcInfos, infos...)
+	cc.ccrpcInfosMu.Unlock()
 
 	if nextDoneMain > lastDoneMain {
 		doneApply = true
@@ -306,20 +359,28 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, blockNumber, timeStamp 
 	return
 }
 
+func (cc *CCrpcImp) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
+	ccinfo := make([]*ccrpctypes.CCrpcTransferInfo, 0)
+	cc.ccrpcInfosMu.Lock()
+	for _, info := range cc.ccrpcInfos {
+		if info.Height >= start && info.Height <= end {
+			ccinfo = append(ccinfo, info)
+		}
+	}
+	cc.ccrpcInfosMu.Unlock()
+	return ccinfo
+}
+
 func AccountCcrpc(ctx *mevmtypes.Context, ti *ccrpctypes.CCrpcTransferInfo) {
-	// height := ti.Height // not used
-	// txid := ti.TxID // not used
-	receiver := ZeniqPubkeyToReceiverAddress(ti.SenderPubkey)
 	amount := uint256.NewInt(0).Mul(uint256.NewInt(uint64(math.Round(ti.Amount*1e8))), uint256.NewInt(1e10))
-	// account amount to receiver
-	receiverAcc := ctx.GetAccount(receiver)
+	receiverAcc := ctx.GetAccount(ti.Receiver)
 	if receiverAcc == nil {
-		receiverAcc = mevmtypes.ZeroAccountInfo() // which will get the balance and be saved/created
+		receiverAcc = mevmtypes.ZeroAccountInfo()
 	}
 	receiverAccBalance := receiverAcc.Balance()
 	receiverAccBalance.Add(receiverAccBalance, amount)
 	receiverAcc.UpdateBalance(receiverAccBalance)
-	ctx.SetAccount(receiver, receiverAcc)
+	ctx.SetAccount(ti.Receiver, receiverAcc)
 }
 
 func ZeniqPubkeyToReceiverAddress(pubkeyBytes [33]byte) common.Address {

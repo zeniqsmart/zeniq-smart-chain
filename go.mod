@@ -94,7 +94,7 @@ require (
 require (
 	github.com/zeniqsmart/ads-zeniq-smart-chain v0.6.2
 	github.com/zeniqsmart/db-zeniq-smart-chain v0.6.2
-	github.com/zeniqsmart/evm-zeniq-smart-chain v0.6.2
+	github.com/zeniqsmart/evm-zeniq-smart-chain v0.6.4
 )
 
 require (
