@@ -30,8 +30,8 @@ func newWeb3API(logger log.Logger) PublicWeb3API {
 func (w web3API) ClientVersion() string {
 	w.logger.Debug("web3_clientVersion")
 	// like Geth/v1.10.2-unstable/darwin-amd64/go1.16.3
-	return fmt.Sprintf("%s/%s/%s/%s",
-		app.ClientID, app.GitTag, runtime.GOOS, runtime.Version())
+	return fmt.Sprintf("%s/%s-%s/%s/%s",
+		app.ClientID, app.GitTag, app.GitCommit, runtime.GOOS, runtime.Version())
 }
 
 // https://eth.wiki/json-rpc/API#web3_sha3

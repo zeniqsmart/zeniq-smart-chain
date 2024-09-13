@@ -54,11 +54,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]] ; then
     cd ../../zeniq-smart-chain
     go mod tidy
 
-    if grep ID /etc/os-release | cut -d'=' -f2 | grep "arch" > /dev/null ; then
-        go build -o ./build/zeniqsmartd ./cmd/zeniqsmartd
-    else
-        go build -ldflags "-linkmode 'external' -extldflags '-static'" -o ./build/zeniqsmartd ./cmd/zeniqsmartd
-    fi
+    make # sets app.GitTag and app.GitCommit
 
 fi
 

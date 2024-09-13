@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math"
@@ -115,6 +116,13 @@ func (backend *apiBackend) GetNonce(address common.Address, height int64) (uint6
 func (backend *apiBackend) GetTransaction(txHash common.Hash) (tx *types.Transaction, sig [65]byte, err error) {
 	ctx := backend.app.GetHistoryOnlyContext()
 	defer ctx.Close(false)
+
+	for _, atx := range backend.app.LastBlockTxs() {
+		if bytes.Equal(atx.Hash[:], txHash[:]) {
+			tx = atx
+			return
+		}
+	}
 
 	if tx, sig, err = ctx.GetTxByHash(txHash); err != nil {
 		return

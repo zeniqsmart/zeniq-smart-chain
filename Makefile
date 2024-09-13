@@ -3,8 +3,10 @@ COMMIT := $(shell git log -1 --format='%H')
 
 build_tags = cppbtree
 
-ldflags += -X github.com/zeniqsmart/zeniq-smart-chain/app.GitCommit=$(COMMIT) \
-		  -X github.com/cosmos/cosmos-sdk/version.GitTag=$(VERSION)
+ldflags += -linkmode 'external'
+ldflags += -extldflags '-static'
+ldflags += -X github.com/zeniqsmart/zeniq-smart-chain/app.GitCommit=$(COMMIT)
+ldflags += -X github.com/cosmos/cosmos-sdk/version.GitTag=$(VERSION)
 
 BUILD_FLAGS := -tags "$(build_tags)" -ldflags '$(ldflags)'
 

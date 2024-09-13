@@ -2,18 +2,19 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/shopspring/decimal"
 	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 type CCrpcTransferInfo struct {
-	Height            int64          `json:"height"`
-	TxID              [32]byte       `json:"txid"`
-	SenderPubkey      [33]byte       `json:"senderpubkey"`
-	Amount            float64        `json:"amount"`
-	EpochEndHeight    int64          `json:"epochendheight"`
-	EpochEndBlockTime int64          `json:"epochendblocktime"` //EEBT
-	ApplicationHeight int64          `json:"applicationheight"`
-	Receiver          common.Address `json:"receiver"`
+	Height            int64           `json:"height"`
+	TxID              [32]byte        `json:"txid"`
+	SenderPubkey      [33]byte        `json:"senderpubkey"`
+	Amount            decimal.Decimal `json:"amount"`
+	EpochEndHeight    int64           `json:"epochendheight"`
+	EpochEndBlockTime int64           `json:"epochendblocktime"` //EEBT
+	ApplicationHeight int64           `json:"applicationheight"`
+	Receiver          common.Address  `json:"receiver"`
 }
 
 type CCrpcEpoch struct {
@@ -25,10 +26,10 @@ type CCrpcEpoch struct {
 }
 
 type CCrpcResponse struct {
-	Height    int64   `json:"height"`
-	TxID      string  `json:"txid"`
-	Hexpubkey string  `json:"hexpubkey"`
-	Amount    float64 `json:"amount"`
+	Height    int64           `json:"height"`
+	TxID      string          `json:"txid"`
+	Hexpubkey string          `json:"hexpubkey"`
+	Amount    decimal.Decimal `json:"amount"`
 }
 type CCrpcCC struct {
 	EpochEndBlockTime int64           `json:"epochEndBlockTime"`

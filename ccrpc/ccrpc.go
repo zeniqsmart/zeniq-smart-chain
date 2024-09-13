@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
+	"github.com/shopspring/decimal"
 	"github.com/tendermint/tendermint/libs/log"
 
 	mevmtypes "github.com/zeniqsmart/evm-zeniq-smart-chain/types"
@@ -204,6 +205,16 @@ func (cc *CCrpcImp) MainTime(h int64) int64 {
 	return cc.rpcMainnet.FetchCrosschain(h, h, 0).EpochEndBlockTime
 }
 
+func parse_zeniq_amount(amount decimal.Decimal) *uint256.Int {
+	d := amount.Shift(18)
+	ds := d.String()
+	u, err := uint256.FromDecimal(ds)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime int64) (doneApply bool) {
 	doneApply = false
 
@@ -239,6 +250,7 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 	}
 	delayChan := make(chan *ccrpctypes.CCrpcEpoch, thisLen)
 	infosMu := &sync.Mutex{}
+	accountMu := &sync.Mutex{}
 	infos := make([]*ccrpctypes.CCrpcTransferInfo, 0)
 	var nextCcrpcSearchTo int64 = cc.ccrpcSearchTo
 
@@ -268,17 +280,17 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 			}
 			if cce.EEBTSmartHeight > atomic.LoadInt64(&nextCcrpcSearchTo) {
 				atomic.StoreInt64(&nextCcrpcSearchTo, cce.EEBTSmartHeight)
-				for _, ti := range cce.TransferInfos {
-					ti.ApplicationHeight = cce.EEBTSmartHeight + nn
-					ti.Receiver = ZeniqPubkeyToReceiverAddress(ti.SenderPubkey)
-					infosMu.Lock()
-					if cce.EEBTSmartHeight+nn <= currHeight {
-						amount := uint256.NewInt(0).Mul(uint256.NewInt(uint64(math.Round(ti.Amount*1e8))), uint256.NewInt(1e10))
-						ebp.AddCrosschain(amount)
-					}
-					infos = append(infos, ti)
-					infosMu.Unlock()
+			}
+			for _, ti := range cce.TransferInfos {
+				ti.ApplicationHeight = cce.EEBTSmartHeight + nn
+				ti.Receiver = ZeniqPubkeyToReceiverAddress(ti.SenderPubkey)
+				infosMu.Lock()
+				if cce.EEBTSmartHeight+nn <= currHeight {
+					amount := parse_zeniq_amount(ti.Amount)
+					ebp.AddCrosschain(amount)
 				}
+				infos = append(infos, ti)
+				infosMu.Unlock()
 			}
 			if cce.EEBTSmartHeight == 0 && /*for test*/ searchBack > 0 {
 				for _, ti := range cce.TransferInfos {
@@ -311,7 +323,9 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 			cc.logger.Info(fmt.Sprintf("%s mapped smart %d, applying now %d, delaying %d",
 				cceLog, cce.EEBTSmartHeight, currHeight, nn))
 			for _, ti := range cce.TransferInfos {
+				accountMu.Lock()
 				AccountCcrpc(ctx, ti)
+				accountMu.Unlock()
 			}
 			return cce.LastHeight // cce done
 		}
@@ -372,7 +386,7 @@ func (cc *CCrpcImp) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransfer
 }
 
 func AccountCcrpc(ctx *mevmtypes.Context, ti *ccrpctypes.CCrpcTransferInfo) {
-	amount := uint256.NewInt(0).Mul(uint256.NewInt(uint64(math.Round(ti.Amount*1e8))), uint256.NewInt(1e10))
+	amount := parse_zeniq_amount(ti.Amount)
 	receiverAcc := ctx.GetAccount(ti.Receiver)
 	if receiverAcc == nil {
 		receiverAcc = mevmtypes.ZeroAccountInfo()

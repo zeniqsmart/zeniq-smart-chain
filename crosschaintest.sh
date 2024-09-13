@@ -44,7 +44,7 @@ echo "$(z_smart_height) WAIT about until $((2*10*60+720))"
 echo "zaddr=$zaddr"
 echo "zaddrkey=$zaddrkey"
 z_pub_from_priv $zaddrkey
-# accoring addres on smartnet
+# according address on smartnet
 echo "zsmartaddr=$zsmartaddr"
 echo "zsmartaddrkey=$zsmartaddrkey"
 
@@ -223,7 +223,8 @@ tx = w3.eth.account.sign_transaction({
 "gasPrice": w3.eth.gas_price,
 "chainId": chainId
 }, "'''${4:-$zsmartaddrkey}'''")
-print(f"0x{w3.eth.send_raw_transaction(tx.rawTransaction).hex()}")
+#print(f"0x{w3.eth.send_raw_transaction(tx.rawTransaction).hex()}")
+print(f"0x{w3.eth.send_raw_transaction(tx.raw_transaction).hex()}")
 '
 }
 
@@ -232,7 +233,9 @@ z_smart_new() {
 }
 
 z_crosschain_at_height(){
-   zbh=$(z_do getblockhash $1)
+   cch=$1
+   #cch=2
+   zbh=$(z_do getblockhash $cch)
    echo "zbh=$zbh"
    ztxh=$(z_do getblock $zbh | jq -r '.tx[0]')
    echo "ztxh=$ztxh"

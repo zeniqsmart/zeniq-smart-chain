@@ -38,4 +38,7 @@ ENV GOFLAGS="-buildvcs=false"
 RUN mkdir /zeniq_smart
 WORKDIR /zeniq_smart
 
+RUN git config --global --add safe.directory /zeniq_smart/zeniq-smart-chain
+RUN git config --global --add safe.directory /zeniq_smart/zeniq-smart-chain
+
 EXPOSE 8545 8546

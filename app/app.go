@@ -116,6 +116,7 @@ type IApp interface {
 	GetBlockForSync(height int64) (blk []byte, err error)
 	GetCCRPCForkBlock() int64
 	CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
+	LastBlockTxs() []*types.Transaction
 }
 
 type App struct {
@@ -696,6 +697,10 @@ func (app *App) GetCCRPCForkBlock() int64 {
 
 func (app *App) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
 	return app.CCRPC.CrosschainInfo(start, end)
+}
+
+func (app *App) LastBlockTxs() []*types.Transaction {
+	return app.txEngine.CommittedTxs()
 }
 
 func (app *App) Commit() abcitypes.ResponseCommit {
