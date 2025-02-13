@@ -19,16 +19,14 @@ const (
 	DefaultChangeRetainEveryN      = 100
 	DefaultPruneEveryN             = 10
 
-	DefaultAppDataPath    = "app"
-	DefaultDbDataPath     = "db"
-	DefaultSyncdbDataPath = "syncdb"
+	DefaultAppDataPath = "app"
+	DefaultDbDataPath  = "db"
 )
 
 type AppConfig struct {
 	//app config:
-	AppDataPath    string `mapstructure:"app_data_path"`
-	DbDataPath     string `mapstructure:"db_data_path"`
-	SyncdbDataPath string `mapstructure:"syncdb_data_path"`
+	AppDataPath string `mapstructure:"app_data_path"`
+	DbDataPath  string `mapstructure:"db_data_path"`
 	// rpc config
 	RpcEthGetLogsMaxResults int `mapstructure:"get_logs_max_results"`
 	// tm db config
@@ -58,10 +56,7 @@ type AppConfig struct {
 
 	ArchiveMode bool `mapstructure:"archive-mode"`
 
-	WithSyncDB bool `mapstructure:"with-syncdb"`
-
 	BlocksBehind   int64      `mapstructure:"blocks-behind"`
-	UpdateOfADSLog bool       `mapstructure:"update-of-ads-log"`
 	CCRPCEpochs    [][]int64  `mapstructure:"cc-rpc-epochs"`
 	CCRPCForkBlock int64      `mapstructure:"cc-rpc-fork-block"` // big number to disable CCRPC
 	HeightRevision [][2]int64 `mapstructure:"height-revision"`
@@ -86,7 +81,6 @@ func DefaultAppConfigWithHome(home string) *AppConfig {
 	return &AppConfig{
 		AppDataPath:             filepath.Join(home, "data", DefaultAppDataPath),
 		DbDataPath:              filepath.Join(home, "data", DefaultDbDataPath),
-		SyncdbDataPath:          filepath.Join(home, "data", DefaultSyncdbDataPath),
 		RpcEthGetLogsMaxResults: DefaultRpcEthGetLogsMaxResults,
 		RetainBlocks:            DefaultRetainBlocks,
 		NumKeptBlocks:           DefaultNumKeptBlocks,
@@ -103,9 +97,7 @@ func DefaultAppConfigWithHome(home string) *AppConfig {
 		Testing:                 false,
 		FrontierGasLimit:        uint64(BlockMaxGas / 200), //5Million gas
 		ArchiveMode:             false,
-		WithSyncDB:              false,
 		BlocksBehind:            0,
-		UpdateOfADSLog:          false,
 		CCRPCEpochs:             [][]int64{{184464, 6, 7200}},      // cc-rpc-epochs
 		CCRPCForkBlock:          math.MaxInt64 - 1000,              // -1000 to allow tests set StartHeight beyond
 		HeightRevision:          [][2]int64{{0, 7}, {14444444, 7}}, // 7=EVMC_ISTANBUL  is default from 0, 11=EVMC_SHANGHAI, next block > 14444444

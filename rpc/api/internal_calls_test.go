@@ -280,7 +280,7 @@ func TestGetTransactionReceipt(t *testing.T) {
     "output": "0x0000000000000000000000000000000000000000000001020000000000000000"
   },
   {
-    "callPath": "staticcall_0_0_1",
+    "callPath": "call_0_0_1",
     "from": "0xa8115c4df61f9fb1e686d1692cd53fa4d4ced237",
     "to": "0x0eefec15be847ced628df09459cb9b8492337210",
     "gas": "0xd5e30",
@@ -313,7 +313,7 @@ func TestGetTransactionReceipt(t *testing.T) {
     "output": "0x0000000000000000000000000000000000000000000001060000000000000000"
   },
   {
-    "callPath": "staticcall_0_1_1",
+    "callPath": "call_0_1_1",
     "from": "0xa8115c4df61f9fb1e686d1692cd53fa4d4ced237",
     "to": "0x0eefec15be847ced628df09459cb9b8492337210",
     "gas": "0xd2a0b",
@@ -326,7 +326,7 @@ func TestGetTransactionReceipt(t *testing.T) {
 ]`
 	ret, err := _api.GetTransactionReceipt(tx4.Hash())
 	require.NoError(t, err)
-	//println(testutils.ToPrettyJSON(ret["internalTransactions"]))
+	println(testutils.ToPrettyJSON(ret["internalTransactions"]))
 	require.Equal(t, callList, testutils.ToPrettyJSON(ret["internalTransactions"]))
 
 	retTxs, err := _api.GetTxListByHeight(gethrpc.BlockNumber(h4))

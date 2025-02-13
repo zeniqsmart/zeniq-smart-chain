@@ -2,17 +2,13 @@ package ccrpc
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 	"github.com/shopspring/decimal"
 	"github.com/tendermint/tendermint/libs/log"
@@ -29,12 +25,10 @@ const (
 	//large enough to preclude a block reorg on mainnet
 	//as that would make a sync impossible later on.
 	ccrpcSequence uint64 = math.MaxUint64 - 5 /*uint64(-6)*/
-	queue                = 1111
 )
 
 var (
-	ErrBalanceNotEnough        = errors.New("balance is not enough")
-	Slotccrpc           string = strings.Repeat(string([]byte{0}), 32)
+	Slotccrpc string = strings.Repeat(string([]byte{0}), 32)
 )
 
 func loadDoneMain(ctx *mevmtypes.Context) (lastHeight int64) {
@@ -53,20 +47,14 @@ func saveDoneMain(ctx *mevmtypes.Context, lastHeight int64) {
 	ctx.SetStorageAt(ccrpcSequence, Slotccrpc, b[:])
 }
 
-type IContextGetter interface {
-	GetRpcContext() *mevmtypes.Context
-}
-
 type CCrpcImp struct {
-	logger         log.Logger
-	rpcMainnet     ccrpctypes.RpcClient
-	ccrpcEpochList []*ccrpctypes.CCrpcEpoch
-	ccrpcEpochChan chan *ccrpctypes.CCrpcEpoch
-	ccrpcEpochs    [][]int64
-	ccrpcInfos     []*ccrpctypes.CCrpcTransferInfo
-	ccrpcInfosMu   sync.Mutex
-	ccrpcSearchTo  int64
-	running        bool
+	logger        log.Logger
+	rpcMainnet    ccrpctypes.RpcClient
+	ccrpcEpochs   [][]int64
+	ccrpcInfos    []*ccrpctypes.CCrpcTransferInfo
+	ccrpcSearchTo int64
+	running       bool
+	fifo          FifoCcrpc
 }
 
 // Create ccrpc handler.
@@ -83,16 +71,18 @@ func Newccrpc(logger log.Logger, chainConfig *param.ChainConfig, rpcclient ccrpc
 		panic(fmt.Errorf("ccrpc: error: mainnet zeniqd not connected. smartzeniqd cannot run without"))
 	}
 	return &CCrpcImp{
-		logger:         logger,
-		rpcMainnet:     rpc,
-		ccrpcEpochList: make([]*ccrpctypes.CCrpcEpoch, 0),
-		ccrpcEpochChan: make(chan *ccrpctypes.CCrpcEpoch, queue),
-		ccrpcEpochs:    chainConfig.AppConfig.CCRPCEpochs,
-		ccrpcInfos:     make([]*ccrpctypes.CCrpcTransferInfo, 0),
-		ccrpcInfosMu:   sync.Mutex{},
-		ccrpcSearchTo:  chainConfig.AppConfig.CCRPCForkBlock,
-		running:        false,
+		logger:        logger,
+		rpcMainnet:    rpc,
+		ccrpcEpochs:   chainConfig.AppConfig.CCRPCEpochs,
+		ccrpcInfos:    make([]*ccrpctypes.CCrpcTransferInfo, 0),
+		ccrpcSearchTo: chainConfig.AppConfig.CCRPCForkBlock,
+		running:       false,
+		fifo:          NewFifo(chainConfig.AppConfig.DbDataPath, logger),
 	}
+}
+
+func (cc *CCrpcImp) Close() {
+	cc.fifo.Close()
 }
 
 func (cc *CCrpcImp) getEpoch(nextFirst int64) (n, nn, minimum int64) {
@@ -115,9 +105,17 @@ func (cc *CCrpcImp) getEpoch(nextFirst int64) (n, nn, minimum int64) {
 	return
 }
 
-func (cc *CCrpcImp) fetcher(ctx *mevmtypes.Context) {
+func (cc *CCrpcImp) Println(s string) {
+	cc.fifo.Println(s)
+}
+func (cc *CCrpcImp) fetcher(ctx *mevmtypes.Context, wg *sync.WaitGroup) {
 	var mainHeight int64 = 0
 	var doneFetch int64 = cc.ccrpcEpochs[0][0] - 1 // from beginning to build ccrpcInfos
+	lastFetched := cc.fifo.LastFetched()
+	if lastFetched > 0 {
+		doneFetch = lastFetched
+	}
+	wg.Done()
 	for {
 		nextFirst := doneFetch + 1
 		n, _, minimum := cc.getEpoch(nextFirst)
@@ -126,7 +124,7 @@ func (cc *CCrpcImp) fetcher(ctx *mevmtypes.Context) {
 
 		startFetching := nextLast + n
 		for mainHeight < startFetching {
-			mainHeight = cc.MainHeight()
+			mainHeight = cc.MainRPC().GetMainnetHeight()
 			if mainHeight >= startFetching {
 				break
 			}
@@ -134,11 +132,12 @@ func (cc *CCrpcImp) fetcher(ctx *mevmtypes.Context) {
 		}
 
 		var ccrpcEpoch = cc.rpcMainnet.FetchCrosschain(nextFirst, nextLast, minimum)
+
 		if ccrpcEpoch != nil {
 			doneFetch = ccrpcEpoch.LastHeight
 			cc.logger.Info(fmt.Sprintf("ccrpc: fetcher: %d txs from (%d-%d) fetched at %d",
 				len(ccrpcEpoch.TransferInfos), nextFirst, nextLast, startFetching))
-			cc.ccrpcEpochChan <- ccrpcEpoch // contains EEBT=EpochEndBlockTime as given by mainnet
+			cc.fifo.Come(ccrpcEpoch) // contains EEBT=EpochEndBlockTime as given by mainnet
 		} else {
 			panic(fmt.Errorf("ccrpc: error: fetching from mainnet failed"))
 		}
@@ -197,12 +196,8 @@ func blockAfterTime(
 	return found, 0
 }
 
-func (cc *CCrpcImp) MainHeight() int64 {
-	return cc.rpcMainnet.GetMainnetHeight()
-}
-
-func (cc *CCrpcImp) MainTime(h int64) int64 {
-	return cc.rpcMainnet.FetchCrosschain(h, h, 0).EpochEndBlockTime
+func (cc *CCrpcImp) MainRPC() ccrpctypes.RpcClient {
+	return cc.rpcMainnet
 }
 
 func parse_zeniq_amount(amount decimal.Decimal) *uint256.Int {
@@ -223,36 +218,20 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 	}
 	if cc.ccrpcSearchTo <= currHeight {
 		if !cc.running {
-			go cc.fetcher(ctx)
 			cc.running = true
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			go cc.fetcher(ctx, wg)
+			wg.Wait()
 		}
 	}
-
-	var lastDoneMain int64 = loadDoneMain(ctx) // expecting 0 the first time
-	var nextDoneMain int64 = lastDoneMain
-
-	var loop = true
-	for loop {
-		select {
-		case cce := <-cc.ccrpcEpochChan:
-			cce.EEBTSmartHeight = 0
-			cc.ccrpcEpochList = append(cc.ccrpcEpochList, cce)
-			loop = len(cc.ccrpcEpochList) < queue
-		default:
-			loop = false
-		}
-	}
-	thisLen := len(cc.ccrpcEpochList)
 
 	blOK := func(bn int64) bool {
 		block, _ := ctx.GetBlockByHeight(uint64(bn))
 		return block != nil
 	}
-	delayChan := make(chan *ccrpctypes.CCrpcEpoch, thisLen)
-	infosMu := &sync.Mutex{}
-	accountMu := &sync.Mutex{}
-	infos := make([]*ccrpctypes.CCrpcTransferInfo, 0)
 	var nextCcrpcSearchTo int64 = cc.ccrpcSearchTo
+	var lastDoneMain int64 = loadDoneMain(ctx) // expecting 0 the first time
 
 	processOne := func(cce *ccrpctypes.CCrpcEpoch) int64 {
 		n, nn, minimum := cc.getEpoch(cce.FirstHeight)
@@ -260,7 +239,6 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 		cceLog := fmt.Sprintf("ccrpc: (%d-%d), n %d, nn %d, minimum %d, %d txs, EEBT %d",
 			cce.FirstHeight, cce.LastHeight, n, nn, minimum, len(cce.TransferInfos), EEBT)
 		if currTime <= cce.EpochEndBlockTime+10 || currHeight <= 1 {
-			delayChan <- cce
 			return 0
 		}
 		// cce.EEBTSmartHeight also for cce.LastHeight < lastDoneMain to fill cc.ccrpcInfos
@@ -275,22 +253,18 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 			cc.logger.Info(fmt.Sprintf("%s search from %d back %d to %d => %d or above %d", cceLog,
 				backStart, searchBack, backTo, cce.EEBTSmartHeight, above))
 			if above > 0 {
-				delayChan <- cce
 				return 0
 			}
-			if cce.EEBTSmartHeight > atomic.LoadInt64(&nextCcrpcSearchTo) {
-				atomic.StoreInt64(&nextCcrpcSearchTo, cce.EEBTSmartHeight)
+			if cce.EEBTSmartHeight > nextCcrpcSearchTo {
+				nextCcrpcSearchTo = cce.EEBTSmartHeight
 			}
 			for _, ti := range cce.TransferInfos {
 				ti.ApplicationHeight = cce.EEBTSmartHeight + nn
 				ti.Receiver = ZeniqPubkeyToReceiverAddress(ti.SenderPubkey)
-				infosMu.Lock()
 				if cce.EEBTSmartHeight+nn <= currHeight {
 					amount := parse_zeniq_amount(ti.Amount)
 					ebp.AddCrosschain(amount)
 				}
-				infos = append(infos, ti)
-				infosMu.Unlock()
 			}
 			if cce.EEBTSmartHeight == 0 && /*for test*/ searchBack > 0 {
 				for _, ti := range cce.TransferInfos {
@@ -323,47 +297,15 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 			cc.logger.Info(fmt.Sprintf("%s mapped smart %d, applying now %d, delaying %d",
 				cceLog, cce.EEBTSmartHeight, currHeight, nn))
 			for _, ti := range cce.TransferInfos {
-				accountMu.Lock()
 				AccountCcrpc(ctx, ti)
-				accountMu.Unlock()
 			}
 			return cce.LastHeight // cce done
 		}
-		delayChan <- cce
 		return 0 // cce for next time
 	}
 
-	var wg sync.WaitGroup
-	for _, cce := range cc.ccrpcEpochList {
-		wg.Add(1)
-		go func(pcce *ccrpctypes.CCrpcEpoch) {
-			if nxt := processOne(pcce); nxt > atomic.LoadInt64(&nextDoneMain) {
-				atomic.StoreInt64(&nextDoneMain, nxt)
-			}
-			wg.Done()
-		}(cce)
-	}
-	wg.Wait()
+	nextDoneMain := cc.fifo.Serve(lastDoneMain, processOne)
 	cc.ccrpcSearchTo = nextCcrpcSearchTo
-	cc.ccrpcEpochList = nil
-	loop = true
-	for loop {
-		select {
-		case cce := <-delayChan:
-			cc.ccrpcEpochList = append(cc.ccrpcEpochList, cce)
-		default:
-			loop = false
-		}
-	}
-	sort.Slice(cc.ccrpcEpochList, func(i, j int) bool {
-		return cc.ccrpcEpochList[i].LastHeight < cc.ccrpcEpochList[j].LastHeight
-	})
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].EpochEndHeight < infos[j].EpochEndHeight
-	})
-	cc.ccrpcInfosMu.Lock()
-	cc.ccrpcInfos = append(cc.ccrpcInfos, infos...)
-	cc.ccrpcInfosMu.Unlock()
 
 	if nextDoneMain > lastDoneMain {
 		doneApply = true
@@ -374,14 +316,7 @@ func (cc *CCrpcImp) ProcessCCRPC(ctx *mevmtypes.Context, currHeight, currTime in
 }
 
 func (cc *CCrpcImp) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo {
-	ccinfo := make([]*ccrpctypes.CCrpcTransferInfo, 0)
-	cc.ccrpcInfosMu.Lock()
-	for _, info := range cc.ccrpcInfos {
-		if info.Height >= start && info.Height <= end {
-			ccinfo = append(ccinfo, info)
-		}
-	}
-	cc.ccrpcInfosMu.Unlock()
+	ccinfo := cc.fifo.CrosschainInfo(start, end)
 	return ccinfo
 }
 
@@ -395,11 +330,6 @@ func AccountCcrpc(ctx *mevmtypes.Context, ti *ccrpctypes.CCrpcTransferInfo) {
 	receiverAccBalance.Add(receiverAccBalance, amount)
 	receiverAcc.UpdateBalance(receiverAccBalance)
 	ctx.SetAccount(ti.Receiver, receiverAcc)
-}
-
-func ZeniqPubkeyToReceiverAddress(pubkeyBytes [33]byte) common.Address {
-	publicKeyECDSA, _ := crypto.DecompressPubkey(pubkeyBytes[:])
-	return crypto.PubkeyToAddress(*publicKeyECDSA)
 }
 
 func (cc *CCrpcImp) suspended(delayDuration time.Duration) {

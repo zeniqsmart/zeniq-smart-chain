@@ -1,7 +1,6 @@
 package testutils
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -43,7 +42,6 @@ const (
 	DefaultGasPrice    = 0
 	DefaultInitBalance = uint64(10000000)
 	BlockInterval      = 5 * time.Second
-	debug              = false
 )
 
 var (
@@ -61,7 +59,8 @@ func (m MockRpcClient) GetMainnetHeight() (height int64) { return 1 }
 func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctypes.CCrpcEpoch) {
 	return nil
 }
-func (m MockRpcClient) IsConnected() bool { return true }
+func (m MockRpcClient) IsConnected() bool                          { return true }
+func (m MockRpcClient) GetMainnetActivePeersCount() (nPeers int64) { return int64(4) }
 
 var _ ccrpctypes.RpcClient = MockRpcClient{}
 
@@ -83,24 +82,19 @@ type TestAppInitArgs struct {
 	InitAmt     *uint256.Int
 	PrivKeys    []string
 	ArchiveMode bool
-	WithSyncDB  bool
 }
 
 func CreateTestApp(keys ...string) *TestApp {
 	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
-		keys, false, false, MockRpcClient{})
+		keys, false, MockRpcClient{})
 }
 func CreateTestAppInArchiveMode(keys ...string) *TestApp {
 	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
-		keys, true, false, MockRpcClient{})
-}
-func CreateTestAppWithSyncDB(keys ...string) *TestApp {
-	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
-		keys, true, true, MockRpcClient{})
+		keys, true, MockRpcClient{})
 }
 func CreateTestAppWithCC(rpccl ccrpctypes.RpcClient, keys ...string) *TestApp {
 	return createTestApp0(0, time.Now(), ed25519.GenPrivKey().PubKey(), bigutils.NewU256(DefaultInitBalance),
-		keys, false, false, rpccl)
+		keys, false, rpccl)
 }
 
 func CreateTestAppWithArgs(args TestAppInitArgs, rpccl ccrpctypes.RpcClient) *TestApp {
@@ -126,16 +120,16 @@ func CreateTestAppWithArgs(args TestAppInitArgs, rpccl ccrpctypes.RpcClient) *Te
 
 	if rpccl == nil {
 		return createTestApp0(startHeight, startTime, pubKey, initAmt, args.PrivKeys,
-			args.ArchiveMode, args.WithSyncDB, MockRpcClient{})
+			args.ArchiveMode, MockRpcClient{})
 	} else {
 		return createTestApp0(startHeight, startTime, pubKey, initAmt, args.PrivKeys,
-			args.ArchiveMode, args.WithSyncDB, rpccl)
+			args.ArchiveMode, rpccl)
 	}
 
 }
 
 func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.PubKey, initAmt *uint256.Int, keys []string,
-	archiveMode bool, withSyncDB bool, rpccl ccrpctypes.RpcClient) *TestApp {
+	archiveMode bool, rpccl ccrpctypes.RpcClient) *TestApp {
 
 	err := os.RemoveAll(testAdsDir)
 	if err != nil {
@@ -149,9 +143,7 @@ func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.Pub
 
 	p.AppConfig.AppDataPath = testAdsDir
 	p.AppConfig.DbDataPath = testDbDir
-	p.AppConfig.SyncdbDataPath = testSyncDir
 	p.AppConfig.ArchiveMode = archiveMode
-	p.AppConfig.WithSyncDB = withSyncDB
 
 	if rpccl != nil {
 		p.AppConfig.CCRPCForkBlock = 0
@@ -187,9 +179,6 @@ func createTestApp0(startHeight int64, startTime time.Time, valPubKey crypto.Pub
 		Height: startHeight,
 	})
 	stateRoot := _app.Commit().Data
-	if debug {
-		fmt.Println("h: 0 StateRoot:", hex.EncodeToString(stateRoot))
-	}
 
 	allBalance := uint256.NewInt(0)
 	if checkAllBalance {
@@ -534,9 +523,6 @@ func (_app *TestApp) AddTxsInBlock(height int64, txs ...*gethtypes.Transaction) 
 	}
 	_app.EndBlock(abci.RequestEndBlock{Height: height})
 	_app.StateRoot = _app.Commit().Data
-	if debug {
-		fmt.Println("h:", height, "StateRoot:", hex.EncodeToString(_app.StateRoot))
-	}
 	_app.WaitLock()
 	return height
 }
@@ -551,9 +537,6 @@ func (_app *TestApp) WaitNextBlock(currHeight int64) {
 	_app.DeliverTx(abci.RequestDeliverTx{})
 	_app.EndBlock(abci.RequestEndBlock{Height: currHeight + 1})
 	_app.StateRoot = _app.Commit().Data
-	if debug {
-		fmt.Println("h:", currHeight+1, "StateRoot:", hex.EncodeToString(_app.StateRoot))
-	}
 	_app.WaitLock()
 }
 

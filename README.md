@@ -78,7 +78,6 @@ For subsequent nodes copy and override above 3 files in, then edit.
   retain-blocks = -1
   retain_interval_blocks = 100
   use_litedb = false
-  with-syncdb = false
   blocks_kept_ads = 10000
   blocks_kept_db = -1
   sig_cache_size = 20000
@@ -114,12 +113,6 @@ New app.toml settings:
 
 - `blocks-behind = 0`, 0 being default, can be set other than 0 to keep a running backup.
   The sync always keeps the given number of blocks behind the current head of validators.
-
-- 'update-of-ads-log = false', can be set true temporarily to create text files
-  `updateOfADS<height>.txt` in the ~/.zeniqsmartd/data/app folder
-  showing which 'key=value/old' changes (keys that got a new value over an old one)
-  happened at that height.
-  This overlaps with `with-syncdb`, which stores in a db but without the old value.
 
 Use zeniqsmartd's `zeniq_crosschainInfo` for infos on applied `crosschain` transactions.
 

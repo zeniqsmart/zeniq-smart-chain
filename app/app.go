@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	gethcmn "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	gethcore "github.com/ethereum/go-ethereum/core"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -38,7 +39,7 @@ import (
 	"github.com/zeniqsmart/ads-zeniq-smart-chain/store"
 	"github.com/zeniqsmart/ads-zeniq-smart-chain/store/rabbit"
 	"github.com/zeniqsmart/db-zeniq-smart-chain/db"
-	"github.com/zeniqsmart/db-zeniq-smart-chain/syncdb"
+
 	dbtypes "github.com/zeniqsmart/db-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/ebp"
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
@@ -68,15 +69,19 @@ const (
 	HasPendingTx         uint32 = 108
 	MempoolBusy          uint32 = 109
 	GasLimitTooSmall     uint32 = 110
+	// HEIGHT_PUBLISH_AFTER_BLOCK cannot be activate
+	// because it would lose compliance with existing scripts and ethereum
+	HEIGHT_PUBLISH_AFTER_BLOCK int64 = 0x7FFFFFFFFFFFFFFF
 )
 
 var (
-	errNoSyncDB    = errors.New("syncdb is not open")
-	errNoSyncBlock = errors.New("syncdb block is not ready")
-	/* EIP1559?
-	defaultBaseFeePerGas = uint256.NewInt(0).Bytes32()
-	defaultBaseFeeBlob   = uint256.NewInt(0).Bytes32()
-	*/
+
+/*
+	EIP1559?
+
+defaultBaseFeePerGas = uint256.NewInt(0).Bytes32()
+defaultBaseFeeBlob   = uint256.NewInt(0).Bytes32()
+*/
 )
 
 var (
@@ -110,13 +115,13 @@ type IApp interface {
 	GetLatestBlockNum() int64
 	SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
+	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	LoadBlockInfo() *types.BlockInfo
 	GetValidatorsInfo() ValidatorsInfo
 	IsArchiveMode() bool
-	GetBlockForSync(height int64) (blk []byte, err error)
+	GetBlockForSync(height int64) (syncBytes []byte, err error)
 	GetCCRPCForkBlock() int64
 	CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
-	LastBlockTxs() []*types.Transaction
 }
 
 type App struct {
@@ -130,7 +135,6 @@ type App struct {
 	mads         *ads.ADS
 	root         *store.RootStore
 	historyStore dbtypes.DB
-	syncDB       *syncdb.SyncDB
 
 	currHeight int64
 	trunk      *store.TrunkStore
@@ -138,9 +142,9 @@ type App struct {
 	// 'block' contains some meta information of a block. It is collected during BeginBlock&DeliverTx,
 	// and save to world state in Commit.
 	block *types.Block
-	// Some fields of 'block' are copied to 'currBlock' in Commit. It will be later used by RpcContext
+	// 'blockInfo', filled via syncBlockInfo in Commit, will be later used by RpcContext
 	// Thus, eth_call can view the new block's height a little earlier than eth_blockNumber
-	currBlock       atomic.Value // to store *types.BlockInfo
+	blockInfo       atomic.Value // to store *types.BlockInfo
 	slashValidators [][20]byte   // updated in BeginBlock, used in Commit
 	lastVoters      [][]byte     // updated in BeginBlock, used in Commit
 	lastProposer    [20]byte     // updated in refresh of last block, used in updateValidatorsAndStakingInfo
@@ -155,6 +159,7 @@ type App struct {
 	// feeds
 	chainFeed event.Feed // For pub&sub new blocks
 	logsFeed  event.Feed // For pub&sub new logs
+	txsFeed   event.Feed // For NewPendingTransactionFilter
 	scope     event.SubscriptionScope
 
 	//engine
@@ -257,7 +262,6 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 	app.chainId = chainId
 
 	app.logger = logger.With("module", "app")
-
 	app.logger.Info(fmt.Sprintf("Version %v \n", GitTag))
 	app.logger.Info(fmt.Sprintf("Revision %v \n", app.config.AppConfig.HeightRevision))
 
@@ -282,9 +286,6 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 	app.root, app.mads = CreateRootStore(config.AppConfig.AppDataPath, config.AppConfig.ArchiveMode)
 	app.historyStore = CreateHistoryStore(config.AppConfig.DbDataPath, config.AppConfig.UseLiteDB, config.AppConfig.RpcEthGetLogsMaxResults,
 		app.logger.With("module", "db"))
-	if config.AppConfig.WithSyncDB {
-		app.syncDB = syncdb.NewSyncDB(config.AppConfig.SyncdbDataPath)
-	}
 	app.trunk = app.root.GetTrunkStore(config.AppConfig.TrunkCacheSize).(*store.TrunkStore)
 	app.checkTrunk = app.root.GetReadOnlyTrunkStore(config.AppConfig.TrunkCacheSize).(*store.TrunkStore)
 
@@ -318,9 +319,9 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 	app.frontier = ebp.GetEmptyFrontier()
 
 	/*------set refresh field------*/
-	prevBlk := ctx.GetCurrBlockBasicInfo()
-	if prevBlk != nil {
-		app.block = prevBlk //will be overwritten in BeginBlock soon
+	prevBlock := ctx.GetCurrBlockBasicInfo()
+	if prevBlock != nil {
+		app.block = prevBlock //will be overwritten in BeginBlock soon
 		app.currHeight = app.block.Number
 		app.lastProposer = app.block.Miner
 	} else {
@@ -329,9 +330,9 @@ func NewApp(config *param.ChainConfig, chainId *uint256.Int,
 
 	app.root.SetHeight(app.currHeight)
 	app.txEngine.SetContext(app.GetRunTxContext())
-	if app.currHeight != 0 { // restart postCommit
+	if app.currHeight > 0 && app.currHeight < HEIGHT_PUBLISH_AFTER_BLOCK { // for (=>) avoid a repeat after restart or crash
 		app.mtx.Lock()
-		app.postCommit(app.syncBlockInfo())
+		app.postCommit(app.syncBlockInfo(), false)
 	}
 
 	/*------set stakingInfo------*/
@@ -510,6 +511,7 @@ func (app *App) checkTxWithContext(tx *gethtypes.Transaction, sender gethcmn.Add
 	}
 	app.logger.Debug("checkTxWithContext:", "value", value.String(), "balance", balance.String())
 	app.logger.Debug("leave check tx!")
+
 	return abcitypes.ResponseCheckTx{
 		Code:      abcitypes.CodeTypeOK,
 		GasWanted: int64(tx.Gas()),
@@ -602,6 +604,23 @@ func (app *App) createGenesisAccounts(alloc gethcore.GenesisAlloc) {
 	rbt.WriteBack()
 }
 
+func (app *App) MainTime() int64 {
+	h := app.CCRPC.MainRPC().GetMainnetHeight()
+	fcc := app.CCRPC.MainRPC().FetchCrosschain(h, h, 0)
+	if fcc != nil {
+		return fcc.EpochEndBlockTime
+	} else {
+		return app.block.Timestamp
+	}
+}
+
+func (app *App) mainnetNetworkOK() bool {
+	if app.CCRPC.MainRPC().GetMainnetActivePeersCount() < int64(4) {
+		return false
+	}
+	return true
+}
+
 func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
 	var stat unix.Statfs_t
 	wd, _ := os.Getwd()
@@ -620,10 +639,17 @@ func (app *App) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBe
 		}
 	}
 
+	var maxLagMain int64 = 3600
+	if h > 24000000 {
+		maxLagMain = 24 * 3600
+	}
 	for {
-		require_mainnet_time := app.block.Timestamp - 3600
-		mainnet_time := app.CCRPC.MainTime(app.CCRPC.MainHeight())
+		require_mainnet_time := app.block.Timestamp - maxLagMain
+		mainnet_time := app.MainTime()
 		if require_mainnet_time <= mainnet_time {
+			break
+		}
+		if h > 24000000 && require_mainnet_time > mainnet_time && app.mainnetNetworkOK() {
 			break
 		}
 		app.logger.Info(fmt.Sprintf("waiting till mainnet reaches %v (currently %v)", require_mainnet_time, mainnet_time))
@@ -685,6 +711,10 @@ func (app *App) EndBlock(req abcitypes.RequestEndBlock) abcitypes.ResponseEndBlo
 		app.logger.Debug(fmt.Sprintf("Validator updated in EndBlock: pubkey(%s) votingPower(%d)",
 			hex.EncodeToString(v.Pubkey[:]), v.VotingPower))
 	}
+	txs := app.txEngine.CollectedTx()
+	if len(txs) > 0 {
+		app.txsFeed.Send(gethcore.NewTxsEvent{Txs: txs})
+	}
 
 	return abcitypes.ResponseEndBlock{
 		ValidatorUpdates: valSet,
@@ -699,28 +729,20 @@ func (app *App) CrosschainInfo(start, end int64) []*ccrpctypes.CCrpcTransferInfo
 	return app.CCRPC.CrosschainInfo(start, end)
 }
 
-func (app *App) LastBlockTxs() []*types.Transaction {
-	return app.txEngine.CommittedTxs()
-}
-
 func (app *App) Commit() abcitypes.ResponseCommit {
-	app.logger.Debug("Enter commit!", "collected txs", app.txEngine.CollectedTxsCount())
 	app.mtx.Lock()
 	ctx := app.GetRunTxContext()
 	CCRPCForkBlock := app.GetCCRPCForkBlock()
 	if app.currHeight >= CCRPCForkBlock {
 		app.CCRPC.ProcessCCRPC(ctx, app.currHeight, app.block.Timestamp)
 	}
-	app.logger.Debug(fmt.Sprintf("%d height is timestamp %d",
-		app.block.Number,
-		app.block.Timestamp,
-	))
 	app.updateValidatorsAndStakingInfo(ctx)
 	ctx.Close(true) // context must be written back such that txEngine can read it in 'Prepare'
 
 	app.frontier = app.txEngine.Prepare(app.reorderSeed, 0, param.MaxTxGasLimit)
 	app.refresh()
-	go app.postCommit(app.syncBlockInfo())
+	publishAfterCommit := app.currHeight >= HEIGHT_PUBLISH_AFTER_BLOCK
+	go app.postCommit(app.syncBlockInfo(), publishAfterCommit)
 	return app.buildCommitResponse()
 }
 
@@ -819,7 +841,7 @@ func (app *App) updateValidatorsAndStakingInfo(ctx *types.Context) {
 }
 
 func (app *App) syncBlockInfo() *types.BlockInfo {
-	currBlock := &types.BlockInfo{
+	blockInfo := &types.BlockInfo{
 		Coinbase:  app.block.Miner,
 		Number:    app.block.Number,
 		Timestamp: app.block.Timestamp,
@@ -831,44 +853,53 @@ func (app *App) syncBlockInfo() *types.BlockInfo {
 		*/
 		Revision: app.fromHeightRevision(app.block.Number),
 	}
-	app.currBlock.Store(currBlock)
-	app.logger.Debug(fmt.Sprintf("blockInfo: [height:%d, hash:%s]", currBlock.Number, gethcmn.Hash(currBlock.Hash).Hex()))
-	return currBlock
+	app.blockInfo.Store(blockInfo)
+	app.logger.Debug(fmt.Sprintf("blockInfo: [height:%d, hash:%s]", blockInfo.Number, gethcmn.Hash(blockInfo.Hash).Hex()))
+	return blockInfo
 }
 
 func (app *App) LoadBlockInfo() *types.BlockInfo {
-	return app.currBlock.Load().(*types.BlockInfo)
+	return app.blockInfo.Load().(*types.BlockInfo)
 }
 
-func (app *App) postCommit(currBlock *types.BlockInfo) {
+func (app *App) postCommit(bi *types.BlockInfo, publishAfterCommit bool) {
 	defer app.mtx.Unlock()
-	if currBlock != nil {
-		if currBlock.Number > 1 {
-			hash := app.historyStore.GetBlockHashByHeight(currBlock.Number - 1)
+	if bi != nil {
+		if bi.Number > 1 {
+			hash := app.historyStore.GetBlockHashByHeight(bi.Number - 1)
 			if hash == [32]byte{} {
-				app.logger.Debug(fmt.Sprintf("postcommit blockInfo: height:%d, blockHash:%s", currBlock.Number-1, gethcmn.Hash(hash).Hex()))
+				app.logger.Debug(fmt.Sprintf("postcommit blockInfo: height:%d, blockHash:%s", bi.Number-1, gethcmn.Hash(hash).Hex()))
 			}
 		}
 	}
-	app.txEngine.Execute(currBlock)
+	app.txEngine.Execute(bi)
 	app.lastGasUsed, app.lastGasRefund, app.lastGasFee = app.txEngine.GasUsedInfo()
+	if publishAfterCommit {
+		app.publish(app.block)
+	}
 }
 
-func logUpdateOfADS(dataPath string, height int64, updateOfADS map[string]string) string {
-	fm := path.Join(dataPath, fmt.Sprintf("updateOfADS%d.txt", height))
-	f, _ := os.Create(fm)
-	f.Write([]byte(fmt.Sprintf("updated_in_height %v\n", height)))
-	// just new values could be written via
-	// for k,v := range updateOfADS { f.Write([]byte(fmt.Sprintf("%x=%x\n", k, v))) }
-	// ... but to have the old value NewOverOldFile
-	ads.NewOverOldFile = f
-	return fm
-}
-func logUpdateOfAdsDone() {
-	if ads.NewOverOldFile != nil {
-		ads.NewOverOldFile.Close()
+func (app *App) publish(block *types.Block) {
+	copy(block.StateRoot[:], app.appHash)
+	block.GasUsed = app.lastGasUsed
+	blk4DB := dbtypes.Block{
+		Height: block.Number,
 	}
-	ads.NewOverOldFile = nil
+	block.Transactions = app.txEngine.CommittedTxIds()
+	blkInfo, err := block.MarshalMsg(nil)
+	if err != nil {
+		panic(err)
+	}
+	copy(blk4DB.BlockHash[:], block.Hash[:])
+	blk4DB.BlockInfo = blkInfo
+	blk4DB.TxList = app.txEngine.CommittedTxsForDB()
+	if app.config.AppConfig.NumKeptBlocksInDB > 0 && app.currHeight > app.config.AppConfig.NumKeptBlocksInDB {
+		app.historyStore.AddBlock(&blk4DB, app.currHeight-app.config.AppConfig.NumKeptBlocksInDB, app.txid2sigMap)
+	} else {
+		app.historyStore.AddBlock(&blk4DB, -1, app.txid2sigMap) // do not prune db
+	}
+	app.txid2sigMap = make(map[[32]byte][65]byte) // clear its content after flushing into historyStore
+	app.publishNewBlock(&blk4DB)
 }
 
 func (app *App) refresh() {
@@ -877,13 +908,9 @@ func (app *App) refresh() {
 
 	ctx := app.GetRunTxContext()
 
-	prevBlkInfo := ctx.GetCurrBlockBasicInfo()
-	if prevBlkInfo == nil {
-		app.logger.Debug(fmt.Sprintf("prevBlkInfo is nil in height:%d", app.block.Number))
-	} else {
-		app.logger.Debug(fmt.Sprintf("prevBlkInfo: blockHash:%s, number:%d", gethcmn.Hash(prevBlkInfo.Hash).Hex(), prevBlkInfo.Number))
-	}
+	prevBlock := ctx.GetCurrBlockBasicInfo()
 	ctx.SetCurrBlockBasicInfo(app.block)
+
 	//refresh lastMinGasPrice
 	mGP := staking.LoadMinGasPrice(ctx, false) // load current block's gas price
 	staking.SaveMinGasPrice(ctx, mGP, true)    // save it as last block's gas price
@@ -891,59 +918,19 @@ func (app *App) refresh() {
 	ctx.Close(true)
 
 	lastCacheSize := app.trunk.CacheSize() // predict the next truck's cache size with the last one
-	updateOfADS := app.trunk.GetCacheContent()
+	app.trunk.Close(true)                  //write cached KVs back to app.root
 
-	if app.config.AppConfig.UpdateOfADSLog {
-		rh := hex.EncodeToString(app.root.GetRootHash())
-		update_file := logUpdateOfADS(app.config.AppConfig.AppDataPath, app.currHeight, updateOfADS)
-		app.logger.Info(fmt.Sprintf("%d _apphash_ %v updateOfADS in %s\n",
-			app.currHeight,
-			rh,
-			update_file,
-		))
-	}
-
-	app.trunk.Close(true) //write cached KVs back to app.root
-
-	if app.config.AppConfig.UpdateOfADSLog {
-		logUpdateOfAdsDone()
-	}
-
-	if !app.config.AppConfig.ArchiveMode && prevBlkInfo != nil &&
-		prevBlkInfo.Number%app.config.AppConfig.PruneEveryN == 0 &&
-		prevBlkInfo.Number > app.config.AppConfig.NumKeptBlocks {
-		app.mads.PruneBeforeHeight(prevBlkInfo.Number - app.config.AppConfig.NumKeptBlocks)
+	if !app.config.AppConfig.ArchiveMode && prevBlock != nil &&
+		prevBlock.Number%app.config.AppConfig.PruneEveryN == 0 &&
+		prevBlock.Number > app.config.AppConfig.NumKeptBlocks {
+		app.mads.PruneBeforeHeight(prevBlock.Number - app.config.AppConfig.NumKeptBlocks)
 	}
 
 	app.appHash = append([]byte{}, app.root.GetRootHash()...)
 
-	//jump block which prev height = 0
-	if prevBlkInfo != nil {
-		//use current block commit appHash as prev history block stateRoot
-		copy(prevBlkInfo.StateRoot[:], app.appHash)
-		prevBlkInfo.GasUsed = app.lastGasUsed
-		prevBlk4DB := dbtypes.Block{
-			Height: prevBlkInfo.Number,
-		}
-		prevBlkInfo.Transactions = app.txEngine.CommittedTxIds()
-		blkInfo, err := prevBlkInfo.MarshalMsg(nil)
-		if err != nil {
-			panic(err)
-		}
-		copy(prevBlk4DB.BlockHash[:], prevBlkInfo.Hash[:])
-		prevBlk4DB.BlockInfo = blkInfo
-		prevBlk4DB.TxList = app.txEngine.CommittedTxsForDB()
-		if app.config.AppConfig.NumKeptBlocksInDB > 0 && app.currHeight > app.config.AppConfig.NumKeptBlocksInDB {
-			app.historyStore.AddBlock(&prevBlk4DB, app.currHeight-app.config.AppConfig.NumKeptBlocksInDB, app.txid2sigMap)
-		} else {
-			app.historyStore.AddBlock(&prevBlk4DB, -1, app.txid2sigMap) // do not prune db
-		}
-		if app.syncDB != nil {
-			app.syncDB.AddBlock(prevBlk4DB.Height, &prevBlk4DB, app.txid2sigMap, updateOfADS)
-		}
-
-		app.txid2sigMap = make(map[[32]byte][65]byte) // clear its content after flushing into historyStore
-		app.publishNewBlock(&prevBlk4DB)
+	if app.currHeight <= HEIGHT_PUBLISH_AFTER_BLOCK && prevBlock != nil {
+		// (<= instead of <) to have 2 publish at this height needed to catch up
+		app.publish(prevBlock)
 	}
 	//make new
 	app.recheckCounter = 0 // reset counter before counting the remained TXs which need rechecking
@@ -987,6 +974,7 @@ func (app *App) Stop() {
 	app.historyStore.Close()
 	app.root.Close()
 	app.scope.Close()
+	app.CCRPC.Close()
 }
 
 func (app *App) GetRpcContext() *types.Context {
@@ -1051,13 +1039,13 @@ func (app *App) RunTxForRpc(gethTx *gethtypes.Transaction, sender gethcmn.Addres
 	ctx := app.GetRpcContextAtHeight(height)
 	defer ctx.Close(false)
 	runner := ebp.NewTxRunner(ctx, txToRun)
-	currBlock := app.currBlock.Load().(*types.BlockInfo)
-	if height > 0 {
+	bi := app.LoadBlockInfo()
+	if height > 0 { // height==0 means latest bi
 		blk, err := ctx.GetBlockByHeight(uint64(height))
 		if err != nil {
 			return nil, 0
 		}
-		currBlock = &types.BlockInfo{
+		bi = &types.BlockInfo{
 			Coinbase:  blk.Miner,
 			Number:    blk.Number,
 			Timestamp: blk.Timestamp,
@@ -1070,7 +1058,7 @@ func (app *App) RunTxForRpc(gethTx *gethtypes.Transaction, sender gethcmn.Addres
 			Revision: app.fromHeightRevision(blk.Number),
 		}
 	}
-	estimateResult := ebp.RunTxForRpc(currBlock, estimateGas, runner)
+	estimateResult := ebp.RunTxForRpc(bi, estimateGas, runner)
 	return runner, estimateResult
 }
 
@@ -1091,7 +1079,7 @@ func (app *App) RunTxForSbchRpc(gethTx *gethtypes.Transaction, sender gethcmn.Ad
 	if err != nil {
 		return nil, 0
 	}
-	currBlock := &types.BlockInfo{
+	bi := &types.BlockInfo{
 		Coinbase:  blk.Miner,
 		Number:    blk.Number,
 		Timestamp: blk.Timestamp,
@@ -1103,7 +1091,7 @@ func (app *App) RunTxForSbchRpc(gethTx *gethtypes.Transaction, sender gethcmn.Ad
 		*/
 		Revision: app.fromHeightRevision(blk.Number),
 	}
-	estimateResult := ebp.RunTxForRpc(currBlock, false, runner)
+	estimateResult := ebp.RunTxForRpc(bi, false, runner)
 	return runner, estimateResult
 }
 
@@ -1115,6 +1103,10 @@ func (app *App) SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscripti
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (app *App) SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription {
 	return app.scope.Track(app.logsFeed.Subscribe(ch))
+}
+
+func (app *App) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return app.scope.Track(app.txsFeed.Subscribe(ch))
 }
 
 func (app *App) GetLastGasUsed() uint64 {
@@ -1158,16 +1150,8 @@ func (app *App) GetCurrEpoch() *stake.Epoch {
 	return epoch
 }
 
-func (app *App) GetBlockForSync(height int64) (blk []byte, err error) {
-	if app.syncDB == nil {
-		return nil, errNoSyncDB
-	}
-
-	blk = app.syncDB.Get(height)
-	if blk == nil {
-		err = errNoSyncBlock
-	}
-	return
+func (app *App) GetBlockForSync(height int64) (syncBytes []byte, err error) {
+	return nil, errors.New("syncdb is deprecated")
 }
 
 // nolint
@@ -1187,7 +1171,6 @@ func (app *App) randomPanic(baseNumber, primeNumber int64) { // breaks normal fu
 	go func(sleepMilliseconds int64) {
 		time.Sleep(time.Duration(sleepMilliseconds * int64(time.Millisecond)))
 		s := fmt.Sprintf("random panic after %d millisecond", sleepMilliseconds)
-		fmt.Println(s)
 		panic(s)
 	}(baseNumber + time.Now().UnixNano()%primeNumber)
 }

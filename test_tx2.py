@@ -138,7 +138,7 @@ def setup_acct():
             rf'sed -i "s/0xf96ae03f3637e3195ebcb85f0043052338196e57/{acctaddr}/g" {ndir}/node{i}/config/genesis.json',
             rf'sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[{BC},6,7200]]/g" {ndir}/node{i}/config/app.toml',
             rf'sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" {ndir}/node{i}/config/app.toml',
-            rf'sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" {ndir}/node{i}/config/app.toml'
+            rf'sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.18.188.1:57319\"/g" {ndir}/node{i}/config/app.toml'
         ]:
             os.system(x)
     fixnode(0)

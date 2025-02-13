@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math"
@@ -44,10 +43,10 @@ type apiBackend struct {
 	//chainSideFeed event.Feed
 	//chainHeadFeed event.Feed
 	//blockProcFeed event.Feed
-	txFeed event.Feed
+	//txsFeed event.Feed
 	//logsFeed   event.Feed
 	rmLogsFeed event.Feed
-	//pendingLogsFeed event.Feed
+	//P pendingLogsFeed event.Feed
 }
 
 func NewBackend(node ITmNode, app app.IApp) BackendService {
@@ -116,13 +115,6 @@ func (backend *apiBackend) GetNonce(address common.Address, height int64) (uint6
 func (backend *apiBackend) GetTransaction(txHash common.Hash) (tx *types.Transaction, sig [65]byte, err error) {
 	ctx := backend.app.GetHistoryOnlyContext()
 	defer ctx.Close(false)
-
-	for _, atx := range backend.app.LastBlockTxs() {
-		if bytes.Equal(atx.Hash[:], txHash[:]) {
-			tx = atx
-			return
-		}
-	}
 
 	if tx, sig, err = ctx.GetTxByHash(txHash); err != nil {
 		return
@@ -362,15 +354,15 @@ func (backend *apiBackend) SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.
 	return backend.app.SubscribeLogsEvent(ch)
 }
 func (backend *apiBackend) SubscribeNewTxsEvent(ch chan<- gethcore.NewTxsEvent) event.Subscription {
-	return backend.txFeed.Subscribe(ch)
+	return backend.app.SubscribeNewTxsEvent(ch)
 }
 func (backend *apiBackend) SubscribeRemovedLogsEvent(ch chan<- gethcore.RemovedLogsEvent) event.Subscription {
 	return backend.rmLogsFeed.Subscribe(ch)
 }
 
-//func (b2 *apiBackend) SubscribePendingLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription {
-//	return b2.pendingLogsFeed.Subscribe(ch)
-//}
+//P func (b2 *apiBackend) SubscribePendingLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription {
+//P 	return b2.pendingLogsFeed.Subscribe(ch)
+//P }
 
 func (backend *apiBackend) BloomStatus() (uint64, uint64) {
 	return 4096, 0 // this is temporary implementation

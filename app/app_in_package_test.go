@@ -18,7 +18,6 @@ import (
 	"github.com/zeniqsmart/zeniq-smart-chain/param"
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 var p *param.ChainConfig
@@ -46,7 +45,8 @@ func (m MockRpcClient) GetBlockByHash(hash [32]byte) *ccrpctypes.MainBlock { ret
 func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctypes.CCrpcEpoch) {
 	return nil
 }
-func (m MockRpcClient) IsConnected() bool { return true }
+func (m MockRpcClient) IsConnected() bool                          { return true }
+func (m MockRpcClient) GetMainnetActivePeersCount() (nPeers int64) { return int64(4) }
 
 var _ ccrpctypes.RpcClient = MockRpcClient{}
 

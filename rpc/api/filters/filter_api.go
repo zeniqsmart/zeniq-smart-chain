@@ -3,15 +3,20 @@ package filters
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
+	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+
+	"github.com/ethereum/go-ethereum/common"
 	gethcmn "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	gethfilters "github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/zeniqsmart/zeniq-smart-chain/rpc/internal/ethapi"
 
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	mapi "github.com/zeniqsmart/zeniq-smart-chain/api"
@@ -29,6 +34,7 @@ type PublicFilterAPI interface {
 	GetLogs(crit gethfilters.FilterCriteria) ([]*gethtypes.Log, error)
 	NewBlockFilter() rpc.ID
 	NewFilter(crit gethfilters.FilterCriteria) (rpc.ID, error)
+	NewPendingTransactionFilter(fullTx *bool) rpc.ID
 	UninstallFilter(id rpc.ID) bool
 	NewHeads(ctx context.Context) (*rpc.Subscription, error)
 	Logs(ctx context.Context, crit gethfilters.FilterCriteria) (*rpc.Subscription, error)
@@ -48,6 +54,8 @@ type filter struct {
 	typ      Type
 	deadline *time.Timer // filter is inactive when deadline triggers
 	hashes   []gethcmn.Hash
+	fullTx   bool
+	txs      []*gethtypes.Transaction
 	crit     gethfilters.FilterCriteria
 	logs     []*gethtypes.Log
 	s        *Subscription // associated subscription in event system
@@ -138,6 +146,41 @@ func (api *filterAPI) NewFilter(crit gethfilters.FilterCriteria) (filterID rpc.I
 	return logsSub.ID, nil
 }
 
+// NewPendingTransactionFilter creates a filter that fetches pending transactions
+// as transactions enter the pending state.
+//
+// It is part of the filter package because this filter can be used through the
+// `eth_getFilterChanges` polling method that is also used for log filters.
+func (api *filterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
+	api.logger.Debug("eth_newPendingTransactionFilter")
+	logs := make(chan []*gethtypes.Log)
+	var (
+		pendingTxs   = make(chan []*gethtypes.Transaction)
+		pendingTxSub = api.events.SubscribePendingTxs(pendingTxs, logs)
+	)
+	api.filtersMu.Lock()
+	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, fullTx: fullTx != nil && *fullTx, deadline: time.NewTimer(deadline), txs: make([]*gethtypes.Transaction, 0), s: pendingTxSub}
+	api.filtersMu.Unlock()
+	go func() {
+		for {
+			select {
+			case pTx := <-pendingTxs:
+				api.filtersMu.Lock()
+				if f, found := api.filters[pendingTxSub.ID]; found {
+					f.txs = append(f.txs, pTx...)
+				}
+				api.filtersMu.Unlock()
+			case <-pendingTxSub.Err():
+				api.filtersMu.Lock()
+				delete(api.filters, pendingTxSub.ID)
+				api.filtersMu.Unlock()
+				return
+			}
+		}
+	}()
+	return pendingTxSub.ID
+}
+
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 //
@@ -222,10 +265,48 @@ func (api *filterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	f.deadline.Reset(deadline)
 
 	switch f.typ {
-	case /*PendingTransactionsSubscription, */ BlocksSubscription:
+	case PendingTransactionsSubscription:
+		if f.fullTx {
+			txs := make([]*ethapi.Transaction, 0, len(f.txs))
+			for _, tx := range f.txs {
+				v, r, s := tx.RawSignatureValues()
+				signer := gethtypes.NewEIP155Signer(tx.ChainId())
+				from, _ := signer.Sender(tx)
+				index := uint64(0)
+				txs = append(txs, &ethapi.Transaction{
+					BlockHash:        nil,
+					BlockNumber:      (*hexutil.Big)(new(big.Int).SetUint64(0)),
+					TransactionIndex: (*hexutil.Uint64)(&index),
+					From:             from,
+					Gas:              hexutil.Uint64(tx.Gas()),
+					GasPrice:         (*hexutil.Big)(tx.GasPrice()),
+					Hash:             tx.Hash(),
+					Input:            hexutil.Bytes(tx.Data()),
+					Nonce:            hexutil.Uint64(tx.Nonce()),
+					To:               tx.To(),
+					Value:            (*hexutil.Big)(tx.Value()),
+					V:                (*hexutil.Big)(v),
+					R:                (*hexutil.Big)(r),
+					S:                (*hexutil.Big)(s),
+				})
+
+				//NewRPCPendingTransaction(tx, rpc.LatestBlockNumber, chainConfig))
+			}
+			f.txs = nil
+			return txs, nil
+		} else {
+			hashes := make([]common.Hash, 0, len(f.txs))
+			for _, tx := range f.txs {
+				hashes = append(hashes, tx.Hash())
+			}
+			f.txs = nil
+			return hashes, nil
+		}
+	case BlocksSubscription:
 		hashes := f.hashes
 		f.hashes = nil
 		return returnHashes(hashes), nil
+	//P case LogsSubscription, MinedAndPendingLogsSubscription:
 	case LogsSubscription /*, MinedAndPendingLogsSubscription*/ :
 		logs := make([]*gethtypes.Log, len(f.logs))
 		copy(logs, f.logs)

@@ -3,6 +3,8 @@ services:
     build: .
     command: zeniq-smart-chain/build/zeniqsmartd start --testing
     volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
       - ../:/zeniq_smart
       - ./build/testnodes/node0:/root/.zeniqsmartd
     networks:
@@ -12,6 +14,8 @@ services:
     build: .
     command: zeniq-smart-chain/build/zeniqsmartd start --testing
     volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
       - ../:/zeniq_smart
       - ./build/testnodes/node1:/root/.zeniqsmartd
     networks:
@@ -21,6 +25,8 @@ services:
     build: .
     command: zeniq-smart-chain/build/zeniqsmartd start --testing
     volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
       - ../:/zeniq_smart
       - ./build/testnodes/node2:/root/.zeniqsmartd
     networks:
@@ -30,6 +36,8 @@ services:
     build: .
     command: zeniq-smart-chain/build/zeniqsmartd start --testing
     volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
       - ../:/zeniq_smart
       - ./build/testnodes/node3:/root/.zeniqsmartd
     networks:

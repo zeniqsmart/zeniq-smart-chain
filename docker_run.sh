@@ -15,12 +15,12 @@ sudo rm -rf build
 testing:
 
 docker run -it -v ${PWD%/*}:/zeniq_smart zeniqsmart bash
-http --auth zeniq:zeniq123 http://172.17.0.1:57319 method=getblockcount params:='[]'
+http --auth zeniq:zeniq123 http://172.18.188.1:57319 method=getblockcount params:='[]'
 cd /zeniq_smart/zeniq-smart-chain
 ./build/zeniqsmartd init dockerzeniqsmartd --chain-id 0x59454E4951
 \cp -rf config/* $HOME/.zeniqsmartd/config/
 cat $HOME/.zeniqsmartd/config/app.toml
-sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $HOME/.zeniqsmartd/config/app.toml
+sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.18.188.1:57319\"/g" $HOME/.zeniqsmartd/config/app.toml
 # ... too slow startup
 # sed -i "s/zeniqsmart-rpc-url.*/#\0/g" $HOME/.zeniqsmartd/config/app.toml
 ./build/zeniqsmartd start --testing

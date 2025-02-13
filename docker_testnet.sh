@@ -25,7 +25,7 @@ BC=$(curl -X POST --data-binary '{"jsonrpc":"1.0","method":"getblockcount","para
 echo "$BC will be first mainnet block of ccrpc epoch 0"
 sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[$BC,6,7200]]/g" build/testnodes/node0/config/app.toml
 sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" build/testnodes/node0/config/app.toml
-sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" build/testnodes/node0/config/app.toml
+sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.18.188.1:57319\"/g" build/testnodes/node0/config/app.toml
 build/zeniqsmartd start --testing
 
 
@@ -75,7 +75,7 @@ fi
 patch_node(){
 sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [${2}]/g" $BD/testnodes/node${1}/config/app.toml
 sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" $BD/testnodes/node${1}/config/app.toml
-sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $BD/testnodes/node${1}/config/app.toml
+sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.18.188.1:57319\"/g" $BD/testnodes/node${1}/config/app.toml
 }
 
 ccrpc=${3:-"[$BC,2,2400]"}

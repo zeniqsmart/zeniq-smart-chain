@@ -15,11 +15,12 @@ mainnet-rpc-password = "zeniq123"
 zeniqsmart-rpc-url = "https://smart.zeniq.network:9545"
 
 blocks-behind = 0
-update-of-ads-log = false
 height-revision = [ [0, 7], [66123456, 11] ]
 
-# the following 2 consensus-relevant
-cc-rpc-epochs=[[220200,100,100000]]
+# the following 2 consensus-relevant:
+# main height, main epoch, smart application delay, minimum in Satoshi
+cc-rpc-epochs = [[220200,100,100000,100000000000],[260100,300,300000,100000000000]]
+
 cc-rpc-fork-block=16880000
 
 

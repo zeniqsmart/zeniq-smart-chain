@@ -4,13 +4,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/log"
-	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 	"io/ioutil"
 	"math/big"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/log"
+	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
 )
 
 /*
@@ -23,6 +24,7 @@ ccrpc/rpcclient.go:274:31: undefined: ccrpctypes.BlockInfoResp
 */
 
 const (
+	ReqPeerInfo      = `{"jsonrpc": "1.0", "id":"zeniqsmart", "method": "getpeerinfo", "params": [] }`
 	ReqStrBlockCount = `{"jsonrpc": "1.0", "id":"zeniqsmart", "method": "getblockcount", "params": [] }`
 	ReqStrBlockHash  = `{"jsonrpc": "1.0", "id":"zeniqsmart", "method": "getblockhash", "params": [%d] }`
 	//verbose = 2, show all txs rawdata
@@ -62,12 +64,27 @@ func (client *RpcClientImp) IsConnected() bool {
 	return client != nil
 }
 
+func (client *RpcClientImp) GetMainnetActivePeersCount() (nPeers int64) {
+	const TIMEOUT_INTERVAL int64 = 120
+	nPeers = 0
+	peers := client.getPeerInfo()
+	if peers == nil {
+		return
+	}
+	for _, p := range peers {
+		if p.Pingtime < float64(TIMEOUT_INTERVAL) {
+			nPeers += 1
+		}
+	}
+	return
+}
+
 func (client *RpcClientImp) GetMainnetHeight() (height int64) {
 	height = -1
 	for height == -1 {
 		height = client.getCurrHeight()
 		if client.err != nil {
-			client.logger.Debug("GetMainnetHeight failed", client.err.Error())
+			client.logger.Info("GetMainnetHeight failed", client.err.Error())
 			time.Sleep(10 * time.Second)
 		}
 	}
@@ -91,11 +108,8 @@ func (client *RpcClientImp) FetchCrosschain(first, last, minimum int64) *ccrpcty
 	var cc *ccrpctypes.CCrpcEpoch
 	cc, err = client.getCrosschain(first, last, minimum)
 	if err != nil {
-		client.logger.Debug(fmt.Sprintf("getCrosschain %d %d %v failed", first, last, minimum), err.Error())
+		client.logger.Info(fmt.Sprintf("getCrosschain %d %d %v failed", first, last, minimum), err.Error())
 		return cc
-	}
-	for _, cce := range cc.TransferInfos {
-		client.logger.Debug(fmt.Sprintf("cc entry at block %d ", cce.Height))
 	}
 	return cc
 }
@@ -119,6 +133,20 @@ func (client *RpcClientImp) sendRequest(reqStr string) ([]byte, error) {
 	}
 	resp.Body.Close()
 	return respData, nil
+}
+
+func (client *RpcClientImp) getPeerInfo() []ccrpctypes.PeerInfo {
+	var respData []byte
+	respData, client.err = client.sendRequest(ReqPeerInfo)
+	if client.err != nil {
+		return nil
+	}
+	var peersInfo ccrpctypes.PeersInfo
+	client.err = json.Unmarshal(respData, &peersInfo)
+	if client.err != nil {
+		return nil
+	}
+	return peersInfo.Result
 }
 
 func (client *RpcClientImp) getCurrHeight() int64 {

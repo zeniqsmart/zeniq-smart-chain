@@ -39,7 +39,6 @@ func createzeniqsmartdCmd() *cobra.Command {
 	rootCmd.AddCommand(AddGenesisValidatorCmd(ctx))
 	rootCmd.AddCommand(StakingCmd(ctx))
 	rootCmd.AddCommand(VersionCmd())
-	rootCmd.AddCommand(AddRollbackCmd())
 	rootCmd.AddCommand(AddTestnetCmd())
 	rootCmd.AddCommand(ShowNodeID())
 	rootCmd.AddCommand(ShowNodeID())

@@ -27,6 +27,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -75,6 +76,7 @@ func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctyp
 	cc, _ = ccrpc.DO_GetCrosschain(first, last, m.respData)
 	return
 }
+func (m MockRpcClient) GetMainnetActivePeersCount() (nPeers int64) { return int64(4) }
 
 var _ ccrpctypes.RpcClient = MockRpcClient{}
 
@@ -105,15 +107,15 @@ func TestCCRPC(t *testing.T) {
 	defer ctx.Close(false)
 
 	ti := &ccrpctypes.CCrpcTransferInfo{
-		Height: 184464,
-		TxID:   [32]byte{},
-		Amount: float64(12.34567),
+		Height:   184464,
+		TxID:     [32]byte{},
+		Amount:   decimal.NewFromFloat(12.34567),
+		Receiver: common.Address{60, 5, 27, 151, 223, 91, 8, 119, 214, 176, 42, 138, 249, 160, 250, 11, 68, 165, 11, 252},
 	}
 	pubkey, _ := hex.DecodeString("03a2413b237bf2201f4df87fc0de1305a5871137b15eed15f40a22cd61f3eb92fc")
 	copy(ti.SenderPubkey[:], pubkey)
-	ccrpc.AccountCcrpc(ctx, ti, true)
-	receiver := common.Address{60, 5, 27, 151, 223, 91, 8, 119, 214, 176, 42, 138, 249, 160, 250, 11, 68, 165, 11, 252}
-	receiverAcc := ctx.GetAccount(receiver)
+	ccrpc.AccountCcrpc(ctx, ti)
+	receiverAcc := ctx.GetAccount(ti.Receiver)
 	require.NotNil(t, receiverAcc)
 	receiverAccBalance := receiverAcc.Balance()
 	amount := uint256.NewInt(0).Mul(uint256.NewInt(1234567000), uint256.NewInt(1e10))

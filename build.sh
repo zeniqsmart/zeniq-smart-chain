@@ -48,11 +48,14 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]] ; then
     sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../db-zeniq-smart-chain/go.mod
     sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../evm-zeniq-smart-chain/go.mod
 
+
     cd ../evm-zeniq-smart-chain/evmwrap
     make clean || true
     make -j4
     cd ../../zeniq-smart-chain
     go mod tidy
+    go fmt ./...
+    go generate ./...
 
     make # sets app.GitTag and app.GitCommit
 

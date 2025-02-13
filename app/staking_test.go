@@ -15,12 +15,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/zeniqsmart/zeniq-smart-chain/ccrpc"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/testutils"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking"
 	"github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 
 	ccrpctypes "github.com/zeniqsmart/zeniq-smart-chain/ccrpc/types"
-	stake "github.com/zeniqsmart/zeniq-smart-chain/staking/types"
 )
 
 const (
@@ -70,6 +70,7 @@ func (m MockRpcClient) FetchCrosschain(first, last, minimum int64) (cc *ccrpctyp
 	cc, _ = ccrpc.DO_GetCrosschain(first, last, m.respData)
 	return
 }
+func (m MockRpcClient) GetMainnetActivePeersCount() (nPeers int64) { return int64(4) }
 
 var _ ccrpctypes.RpcClient = MockRpcClient{}
 

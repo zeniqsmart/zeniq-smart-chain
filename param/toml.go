@@ -60,9 +60,6 @@ frontier-gaslimit = {{ .FrontierGasLimit }}
 
 archive-mode = {{ .ArchiveMode }}
 
-with-syncdb = {{ .WithSyncDB }}
-
-update-of-ads-log = {{ .UpdateOfADSLog }}
 blocks-behind = {{ .BlocksBehind }}
 
 # format: [[mainnetHeight>=184464,mainnetBlocks(n)>=6,smartnetDelay>n*1200],...]

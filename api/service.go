@@ -37,7 +37,7 @@ type FilterService interface {
 	SubscribeChainEvent(ch chan<- types.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
-	//SubscribePendingLogsEvent(ch chan<- []*stake.Log) event.Subscription
+	//P SubscribePendingLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
@@ -59,36 +59,36 @@ type BackendService interface {
 	// Blockchain API
 	ChainId() *big.Int
 	//SetHead(number uint64)
-	//HeaderByNumber(ctx context.Context, number int64) (*stake.Header, error)
-	//HeaderByHash(ctx context.Context, hash common.Hash) (*stake.Header, error)
-	//HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stake.Header, error)
-	//CurrentHeader() *stake.Header
+	//HeaderByNumber(ctx context.Context, number int64) (*types.Header, error)
+	//HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
+	//HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error)
+	//CurrentHeader() *types.Header
 	LatestHeight() int64
 	CurrentBlock() (*types.Block, error)
 	BlockByNumber(number int64) (*types.Block, error)
 	BlockByHash(hash common.Hash) (*types.Block, error)
-	//BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stake.Block, error)
+	//BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*gethtypes.Block, error)
 	//StateAndHeaderByNumber(ctx context.Context, number int64) (*state.StateDB, error)
-	//StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *stake.Header, error)
-	//GetReceipts(ctx context.Context, hash common.Hash) (stake.Receipts, error) /*All receipt fields is in stake.Transaction, use getTransaction() instead*/
+	//StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
+	//GetReceipts(ctx context.Context, hash common.Hash) (gethtypes.Receipts, error) /*All receipt fields is in gethtypes.Transaction, use getTransaction() instead*/
 	//GetTd(ctx context.Context, hash common.Hash) *big.Int
-	//GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *stake.Header) (*vm.EVM, func() error, error)
+	//GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error)
 
 	// Transaction pool API
 	SendRawTx(signedTx []byte) (common.Hash, error)
 	GetTransaction(txHash common.Hash) (tx *types.Transaction, sig [65]byte, err error)
-	//GetPoolTransactions() (stake.Transactions, error)
-	//GetPoolTransaction(txHash common.Hash) *stake.Transaction
+	//GetPoolTransactions() (gethtypes.Transactions, error)
+	//GetPoolTransaction(txHash common.Hash) *gethtypes.Transaction
 	//GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	//Stats() (pending int, queued int)
-	//TxPoolContent() (map[common.Address]stake.Transactions, map[common.Address]stake.Transactions)
+	//TxPoolContent() (map[common.Address]gethtypes.Transactions, map[common.Address]gethtypes.Transactions)
 
 	// Filter API
 	//BloomStatus() (uint64, uint64)
-	//GetLogs(blockHash common.Hash) ([][]stake.Log, error)
+	//GetLogs(blockHash common.Hash) ([][]gethtypes.Log, error)
 	//ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
-	//SubscribeLogsEvent(ch chan<- []*stake.Log) event.Subscription
-	//SubscribePendingLogsEvent(ch chan<- []*stake.Log) event.Subscription
+	//SubscribeLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
+	//P SubscribePendingLogsEvent(ch chan<- []*gethtypes.Log) event.Subscription
 	//SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	//SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	//SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription

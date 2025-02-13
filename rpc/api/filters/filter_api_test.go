@@ -18,6 +18,7 @@ import (
 	dbtypes "github.com/zeniqsmart/db-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/evm-zeniq-smart-chain/types"
 	"github.com/zeniqsmart/zeniq-smart-chain/api"
+	"github.com/zeniqsmart/zeniq-smart-chain/internal/ethutils"
 	"github.com/zeniqsmart/zeniq-smart-chain/internal/testutils"
 )
 
@@ -31,6 +32,26 @@ func TestNewFilter(t *testing.T) {
 
 	require.True(t, _api.UninstallFilter(id))
 	require.False(t, _api.UninstallFilter(id))
+}
+
+func TestGetFilterChanges_pendingTransactions(t *testing.T) {
+	_app := testutils.CreateTestApp()
+	defer _app.Destroy()
+	_api := createFiltersAPI(_app)
+	var fullTx bool = true
+	id := _api.NewPendingTransactionFilter(&fullTx)
+	require.NotEmpty(t, id)
+	_, err := _api.GetFilterChanges(id)
+	require.NoError(t, err)
+
+	addTx(_app)
+
+	_app.WaitMS(10)
+	ret, err := _api.GetFilterChanges(id)
+	require.NoError(t, err)
+	txs, ok := ret.([]gethtypes.Transaction)
+	require.True(t, ok)
+	require.Equal(t, 1, len(txs))
 }
 
 func TestGetFilterChanges_blockFilter(t *testing.T) {
@@ -520,6 +541,25 @@ func TestGetLogs_TooManyResults(t *testing.T) {
 func createFiltersAPI(_app *testutils.TestApp) PublicFilterAPI {
 	backend := api.NewBackend(nil, _app.App)
 	return NewAPI(backend, _app.Logger())
+}
+
+func addTx(_app *testutils.TestApp) {
+	block := testutils.NewMdbBlockBuilder().
+		Height(1).Hash(gethcmn.Hash{0xB1}).
+		Tx(gethcmn.Hash{0xC1}, types.Log{
+			Address: [20]byte{0xA1},
+			Topics:  [][32]byte{{0xD1}, {0xD2}},
+		}).Build()
+	reqbegin := abci.RequestBeginBlock{
+		Header: tmproto.Header{Height: block.Height},
+	}
+	_app.BeginBlock(reqbegin)
+	addr1 := gethcmn.Address{0xA1, 0x23}
+	tx, _ := ethutils.EncodeTx(ethutils.NewTx(1, &addr1, big.NewInt(100), 100000, big.NewInt(1), nil))
+	reqtx := abci.RequestDeliverTx{Tx: tx}
+	_app.DeliverTx(reqtx)
+	req := abci.RequestEndBlock{}
+	_app.EndBlock(req)
 }
 
 func addBlock(_app *testutils.TestApp, block *dbtypes.Block) {

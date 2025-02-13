@@ -24,12 +24,6 @@ cd $THS
 
 zeniq_smart=${THS%/*}
 
-sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" go.mod
-sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../db-zeniq-smart-chain/go.mod
-sed -i -e"s/^\/\/ \(replace.*zeniq.*\)/\1/g" ../evm-zeniq-smart-chain/go.mod
-go mod tidy
-go fmt ./...
-go generate ./...
 docker build -t zeniqsmart .
 # then start the container mapping host, e.g. ~/smartzeniq to the container's /zeniq_smart using
 docker run -t -v $zeniq_smart:/zeniq_smart zeniqsmart zeniq-smart-chain/build.sh

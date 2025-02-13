@@ -12,7 +12,8 @@ sudo ./docker_build.sh
 
 Manual testing:
 
-zeniqd=$HOME/zeniq-core_build/src/zeniqd
+HERE=`pwd`
+zeniqd=$(realpath $HERE/../../zeniq-core_build/src/zeniqd)
 echo "zeniqd=$zeniqd"
 
 . ./crosschaintest.sh
@@ -164,7 +165,7 @@ zsmartgenesiskey=$zsmartgenesiskey
 zsmartgenesis=$zsmartgenesis
 BC=$BC
 EOF
-   echo ". $zdatadir/zinfo.sh to work on another terminal"
+   echo ". $zdatadir/zinfo.sh # to work on another terminal"
 }
 
 z_cleanup(){
@@ -190,7 +191,6 @@ z_smartnet(){
 }
 
 z_mainnet() {
-   #zeniqd=$HOME/zeniq-core_build/src/zeniqd
    z_datadir
    z_zeniqd
    z_crosschain_at_height 1
@@ -272,17 +272,17 @@ z_smart_addr() {
 
 z_main_crosschain_from_to(){
    curl -X POST --data-binary '{"jsonrpc":"1.0","id":"zeniqsmart","method":"crosschain","params":["'''$1'''","'''$2'''"]}' -H "Content-Type: application/json" http://zeniq:zeniq123@127.0.0.1:57319
-   #found
-   z_do crosschain $1 $2
-   #found
-   z_do crosschain $1 $2 6d7969646d7972657374
-   #found
-   z_do crosschain $1 $2 6d79
-   #found
-   z_do crosschain $1 $2 6666
-   #empty
-   z_do crosschain $1 $2 6d7969646d797265737477
-   #empty
+   # #found
+   # z_do crosschain $1 $2
+   # #found
+   # z_do crosschain $1 $2 6d7969646d7972657374
+   # #found
+   # z_do crosschain $1 $2 6d79
+   # #found
+   # z_do crosschain $1 $2 6666
+   # #empty
+   # z_do crosschain $1 $2 6d7969646d797265737477
+   # #empty
 }
 
 z_main_txblock(){

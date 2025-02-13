@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+BD=`pwd`/build
+echo $BD
+export CGO_LDFLAGS="-L$BD/zstd/lib -L$BD/bz2 -L$BD/lz4/lib -L$BD/snappy/build -L$BD/rocksdb -L$BD/zlib -L$BD/../evm-zeniq-smart-chain/evmwrap/host_bridge -lrocksdb -lsnappy -llz4 -lbz2 -lzstd -lz -lstdc++ -lm"
+export CGO_CFLAGS="-I$BD/zstd/lib -I$BD/lz4/lib -I$BD/bz2 -I$BD/snappy -I$BD/snappy/build -I$BD/rocksdb/include -I$BD/zlib"
+export PATH="${HOME}/go/bin:/usr/local/go/bin:$PATH"
+
 (cd ../ads-zeniq-smart-chain && go test -c -gcflags '-N -l' &> /dev/null && ./ads-zeniq-smart-chain.test)
 echo ads-zeniq-smart-chain
 
@@ -26,6 +32,9 @@ echo zeniq-smart-chain/app
 
 (cd ../zeniq-smart-chain/ccrpc && go test -c -gcflags '-N -l' &> /dev/null && ./ccrpc.test)
 echo zeniq-smart-chain/ccrpc
+
+(cd ../zeniq-smart-chain/rpc/api && go test -c -gcflags '-N -l' &> /dev/null && ./api.test -test.v)
+echo zeniq-smart-chain/rpc/api
 
 (cd ../zeniq-smart-chain/seps && go test -c -gcflags '-N -l' &> /dev/null && ./seps.test)
 echo zeniq-smart-chain/seps

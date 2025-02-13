@@ -54,13 +54,13 @@ mv ./priv_validator_key.json $NODE_HOME/config/
 
 $BD/zeniqsmartd add-genesis-validator --home=$NODE_HOME $VAL
 
-BC_1="$(http --auth zeniq:zeniq123 http://172.17.0.1:57319 method=getblockcount params:='[]' | grep result | jq -r .result)"
+BC_1="$(http --auth zeniq:zeniq123 http://172.18.188.1:57319 method=getblockcount params:='[]' | grep result | jq -r .result)"
 BC=$((1+BC_1))
 echo "$BC will be first mainnet block of ccrpc epoch 0"
 
 sed -i "s/cc-rpc-epochs.*/cc-rpc-epochs = [[$BC,1,1200]]/g" $NODE_HOME/config/app.toml
 sed -i "s/cc-rpc-fork-block.*/cc-rpc-fork-block = 0/g" $NODE_HOME/config/app.toml
-sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.17.0.1:57319\"/g" $NODE_HOME/config/app.toml
+sed -i "s/mainnet-rpc-url.*/mainnet-rpc-url = \"http:\/\/172.18.188.1:57319\"/g" $NODE_HOME/config/app.toml
 
 $BD/zeniqsmartd start --home $NODE_HOME --unlock $TEST_KEYS --https.addr=off --wss.addr=off \
   --http.api='eth,web3,net,txpool,sbch,zeniq,debug' \

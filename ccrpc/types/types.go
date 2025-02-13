@@ -18,10 +18,10 @@ type CCrpcTransferInfo struct {
 }
 
 type CCrpcEpoch struct {
-	FirstHeight       int64
-	LastHeight        int64
-	EpochEndBlockTime int64 // EEBT
-	EEBTSmartHeight   int64
+	FirstHeight       int64 `json:"first"`
+	LastHeight        int64 `json:"last"`
+	EpochEndBlockTime int64 `json:"EEBT"`
+	EEBTSmartHeight   int64 `json:"smartheight"`
 	TransferInfos     []*CCrpcTransferInfo
 }
 
@@ -72,10 +72,21 @@ type RpcClient interface {
 	IsConnected() bool
 	GetMainnetHeight() int64
 	FetchCrosschain(first, last, minimum int64) *CCrpcEpoch
+	GetMainnetActivePeersCount() int64
 }
 
 type BlockCountResp struct {
 	Result int64         `json:"result"`
+	Error  *JsonRpcError `json:"error"`
+	Id     string        `json:"id"`
+}
+
+type PeerInfo struct {
+	Pingtime float64 `json:"pingtime"`
+}
+
+type PeersInfo struct {
+	Result []PeerInfo    `json:"result"`
 	Error  *JsonRpcError `json:"error"`
 	Id     string        `json:"id"`
 }
